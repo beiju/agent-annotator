@@ -7,38 +7,71 @@ import reducer from "../reducer"
 import { LabelsDispatch } from "./labels"
 
 import agents from "../agents.json"
-const defaultLabels = Object.fromEntries(agents.map(agent => [agent.name, {}]))
+const defaultState = {
+    loading: true,
+    activeFrame: 1,
+    activeAgent: null,
+    agentPresent: {},
+    frames: {}
+}
 
 export default function Labeler() {
     const [sample, setSample] = useState(null)
     useEffect(() => {
-        Labelbox.currentAsset().subscribe(setSample)
+        Labelbox.currentAsset().subscribe(sample => {
+            setSample(sample)
+        })
     }, [])
 
-    const [labels, dispatch] = useReducer(reducer, defaultLabels)
+    const [state, dispatch] = useReducer(reducer, defaultState)
 
     useEffect(() => {
         function listener(event) {
             if (event.code.startsWith('Digit') && event.key <= agents.length) {
                 return dispatch({
-                    type: 'toggle_agent_present',
-                    agent: agents[event.key - 1].name
+                    type: 'set_active_agent',
+                    activeAgent: agents[event.key - 1].name
                 })
             }
 
-            // Add more listeners here
+            switch (event.key) {
+                case '`':
+                    return dispatch({ type: 'active_agent_toggle_present' })
+                case ' ':
+                    return dispatch({ type: 'next_frame' })
+                case 'b':
+                    return dispatch({ type: 'previous_frame' })
+                default:
+                    break
+            }
         }
-        document.addEventListener('keyup', listener)
-        return () => document.removeEventListener('keyup', listener)
+        document.addEventListener('keypress', listener)
+        return () => document.removeEventListener('keypress', listener)
     }, [])
+
+    // Save on every frame change
+    const hasSample = !!sample
+    useEffect(() => {
+        if (!hasSample) return
+        Labelbox.setLabelForAsset(JSON.stringify(state)).catch(err => {
+            console.error(err)
+        })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasSample, state.activeFrame])
+
+    function nextVideo() {
+        Labelbox.fetchNextAssetToLabel().catch(err => {
+            console.error(err)
+        })
+    }
 
     if (!sample) return (<p>Loading&hellip;</p>)
 
     return (<Container fluid className="h-100">
         <Row className="h-100">
             <LabelsDispatch.Provider value={dispatch}>
-                <Sidebar labels={labels} />
-                <VideoLabeler sample={sample} />
+                <Sidebar state={state} />
+                <VideoLabeler sample={sample} state={state} nextVideo={nextVideo} />
             </LabelsDispatch.Provider>
         </Row>
     </Container>)

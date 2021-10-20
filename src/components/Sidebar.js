@@ -1,33 +1,42 @@
-import { Col, Form, FormGroup } from "react-bootstrap"
+import { Col } from "react-bootstrap"
 
 import agents from "../agents.json"
 import { useContext } from "react"
 import { LabelsDispatch } from "./labels"
 
-function SidebarAgent({ agent, shortcut, checked, onChange }) {
-    return (<FormGroup controlId={agent.name + "-active"} className="my-2">
-        <Form.Check
-            type="checkbox"
-            checked={checked}
-            onChange={onChange}
-            label={shortcut + ": " + agent.display_name}
-        />    
-    </FormGroup>)
+function SidebarAgent({ agent, active, checked, onActivate, onChange }) {
+    return (<li onClick={onActivate}>
+        <div className={'p-2 ' + (active ? 'bg-primary text-light' : '')}>
+            <input
+                type="checkbox"
+                id={agent.name + "-active"}
+                checked={checked}
+                onChange={onChange}
+            />{' '}
+            {agent.display_name}
+        </div>
+    </li>)
 }
 
-export function Sidebar({ labels }) {
+function AgentSelection({ state }) {
     const dispatch = useContext(LabelsDispatch)
     if (!dispatch) return null
 
-    return (<Col sm={2} className="bg-light h-100 border-end border-dark">
-        <h4 className="text-center">Agents</h4>
+    return <>
+        <h4 className="text-center mt-3">Agents Present</h4>
+        <p className="small text-secondary text-center">Applies to the entire video</p>
 
-        <Form>
-            {agents.map((agent, i) => (
+        <ol className="mx-n2">
+            {agents.map(agent => (
                 <SidebarAgent
+                    key={agent.name}
                     agent={agent}
-                    shortcut={i+1}
-                    checked={labels[agent.name].isPresent}
+                    active={agent.name === state.activeAgent}
+                    onActivate={() => dispatch({
+                        type: 'set_active_agent',
+                        activeAgent: agent.name
+                    })}
+                    checked={state.agentPresent[agent.name] ?? false}
                     onChange={event => dispatch({
                         type: 'set_agent_present',
                         agent: agent.name,
@@ -35,6 +44,37 @@ export function Sidebar({ labels }) {
                     })}
                 />
             ))}
-        </Form>
+        </ol>
+    </>
+}
+
+function QualityInput({ state }) {
+    const dispatch = useContext(LabelsDispatch)
+    if (!dispatch) return null
+
+    return <>
+        <h4 className="text-center">Frame Quality</h4>
+        <p className="small text-secondary text-center">Applies to the current frame</p>
+
+        <ol className="mx-n2">
+            <input
+                type="checkbox"
+                id="motion-blur"
+                checked={state.frames[state.activeFrame]?.motionBlur ?? false}
+                onChange={event => dispatch({
+                    type: 'set_motion_blur',
+                    motionBlur: event.currentTarget.checked
+                })}
+            />{' '}
+            Motion blur
+        </ol>
+    </>
+}
+
+export function Sidebar({ state }) {
+
+    return (<Col sm={2} className="bg-light h-100 border-end border-dark">
+        <AgentSelection state={state} />
+        <QualityInput state={state} />
     </Col>)
 }
