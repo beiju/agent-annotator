@@ -1,0 +1,10 @@
+.timeline {
+    display: flex;
+    height: 16px;
+    background-color: rgb(233, 236, 239);
+    border-radius: 4px;
+}
+
+.timeline-component-labeled {
+    background-color: rgb(40, 167, 69);
+}

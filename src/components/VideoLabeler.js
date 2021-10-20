@@ -1,11 +1,13 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react"
-import { Button, ButtonGroup, ButtonToolbar, Col } from "react-bootstrap"
+import { Col } from "react-bootstrap"
 import point_in_polygon from "robust-point-in-polygon"
 
 import agents from "../agents.json"
 
 import './VideoLabeler.css'
 import { LabelsDispatch } from "./labels"
+import { Timeline } from "./Timeline"
+import { Toolbar } from "./Toolbar"
 
 function transform(x, y, angle) {
     return new DOMMatrix([
@@ -13,23 +15,6 @@ function transform(x, y, angle) {
         Math.sin(angle), Math.cos(angle),
         x, y
     ])
-}
-
-function Toolbar({ state, nextVideo }) {
-    const dispatch = useContext(LabelsDispatch)
-    return (<ButtonToolbar className="m-2 d-flex align-content-center">
-        {state.activeFrame}{' '}
-        <ButtonGroup className="me-2">
-            <Button
-                onClick={() => dispatch({ type: 'previous_frame' })}
-                disabled={state.activeFrame <= 1}
-            >Prev</Button>
-            <Button onClick={() => dispatch({ type: 'next_frame' })}>Next</Button>
-        </ButtonGroup>
-        <ButtonGroup className="me-2">
-            <Button onClick={nextVideo}>Next Video</Button>
-        </ButtonGroup>
-    </ButtonToolbar>)
 }
 
 function getSrcForFrame(sampleData, activeFrame) {
@@ -136,6 +121,8 @@ export function VideoLabeler({ sample, state, nextVideo }) {
     const [drag, setDrag] = useState(null)
 
     function startDrag(x, y, agentName) {
+        if (!agentName) return
+
         setDrag({
             agentName,
             mouse: { x, y },
@@ -168,14 +155,13 @@ export function VideoLabeler({ sample, state, nextVideo }) {
     function onCanvasMousedown(event) {
         const { x, y } = eventToImageCoordinates(event)
         const hoveredAgent = getHoveredAgent(x, y)
-        let agentName = state.activeAgent
         if (hoveredAgent) {
             dispatch({
                 type: 'set_active_agent',
                 activeAgent: hoveredAgent
             })
         }
-        startDrag(x, y, hoveredAgent ?? agentName)
+        startDrag(x, y, hoveredAgent ?? state.activeAgent)
     }
 
     function isDragging() {
@@ -218,7 +204,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
     }
 
     return (<Col className="h-100 d-flex flex-column">
-        <Toolbar state={state} nextVideo={nextVideo} />
+        <Toolbar sample={sample} state={state} nextVideo={nextVideo} />
         <div className="flex-grow-1">
             <canvas
                 className="labeler-canvas"
@@ -228,6 +214,8 @@ export function VideoLabeler({ sample, state, nextVideo }) {
                 onMouseMove={onCanvasMousemove}
                 onWheel={onCanvasWheel}
             />
+
+            <Timeline sample={sample} state={state} />
         </div>
     </Col>)
 }

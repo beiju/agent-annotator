@@ -18,7 +18,15 @@ const defaultState = {
 export default function Labeler() {
     const [sample, setSample] = useState(null)
     useEffect(() => {
-        Labelbox.currentAsset().subscribe(sample => {
+        Labelbox.currentAsset().subscribe(async sample => {
+            if (sample) {
+                const url = sample.data.replace(".mp4", "/num_frames.txt")
+
+                const response = await fetch(url)
+                const text = await response.text()
+                sample.numFrames = parseInt(text, 10)
+            }
+
             setSample(sample)
         })
     }, [])
