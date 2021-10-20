@@ -59,17 +59,10 @@ export default function reducer(state, action) {
                 loading: true,
                 activeFrame: state.activeFrame > 1 ? state.activeFrame - 1 : state.activeFrame
             }
-        case 'set_motion_blur':
-            return {
-                ...state,
-                frames: {
-                    ...state.frames,
-                    [state.activeFrame]: {
-                        ...state.frames[state.activeFrame],
-                        motionBlur: action.motionBlur
-                    }
-                }
-            }
+        case 'set_agent_is_blurred':
+            return updateFrame(state, action.agentName, { isBlurred: action.isBlurred })
+        case 'set_agent_is_obscured':
+            return updateFrame(state, action.agentName, { isObscured: action.isObscured })
         default:
             throw new Error("Unknown reducer action")
     }

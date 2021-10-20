@@ -1,20 +1,24 @@
 import { useContext } from "react"
 import { LabelsDispatch } from "./labels"
-import { Button, ButtonGroup, ButtonToolbar } from "react-bootstrap"
+import { Button, ButtonGroup, Navbar, Spinner } from "react-bootstrap"
+import { AiFillStepForward, AiFillStepBackward } from "react-icons/ai"
 
 export function Toolbar({ sample, state, nextVideo }) {
     const dispatch = useContext(LabelsDispatch)
-    return (<ButtonToolbar className="m-2 d-flex align-content-center">
-        {state.activeFrame}/{sample.numFrames}{' '}
-        <ButtonGroup className="me-2">
+    return (<Navbar className="d-flex justify-content-between">
+        <Navbar.Text>
+            <Spinner animation="border" size="sm" className={`me-2 ${state.loading ? 'visible' : 'invisible'}`} />
+            Frame {state.activeFrame} of {sample.numFrames}
+        </Navbar.Text>
+        <ButtonGroup>
             <Button
                 onClick={() => dispatch({ type: 'previous_frame' })}
                 disabled={state.activeFrame <= 1}
-            >Prev</Button>
-            <Button onClick={() => dispatch({ type: 'next_frame' })}>Next</Button>
+            ><AiFillStepBackward /></Button>
+            <Button onClick={() => dispatch({ type: 'next_frame' })}><AiFillStepForward /></Button>
         </ButtonGroup>
-        <ButtonGroup className="me-2">
+        <ButtonGroup>
             <Button onClick={nextVideo}>Next Video</Button>
         </ButtonGroup>
-    </ButtonToolbar>)
+    </Navbar>)
 }
