@@ -22,6 +22,52 @@ function normalizeAngle(angle) {
     return angle % (Math.PI * 2)
 }
 
+function stepAdvanceDispatch(state) {
+    const presentAgentNames = Object.keys(state.agentPresent).filter(agentName => state.agentPresent[agentName])
+
+    // First, if there is no active agent, try to activate the first present agent
+    if (!state.activeAgent) {
+        if (presentAgentNames.length > 0) {
+            return { type: 'set_active_agent', activeAgent: presentAgentNames[0] }
+        }
+        throw new Error("Tried to advance when no agents were active")
+    }
+
+    // Try to activate the next present agent
+    const idx = presentAgentNames.indexOf(state.activeAgent)
+    if (idx < 0) {
+        throw new Error("Current agent is not present")
+    } else if (idx + 1 < presentAgentNames.length) {
+        return { type: 'set_active_agent', activeAgent: presentAgentNames[idx + 1] }
+    }
+
+    // If nothing else worked, advance the frame and reset the agent
+    return { type: 'advance_frame_and_set_agent', activeAgent: presentAgentNames[0] }
+}
+
+function stepRetreatDispatch(state) {
+    const presentAgentNames = Object.keys(state.agentPresent).filter(agentName => state.agentPresent[agentName]).reverse()
+
+    // First, if there is no active agent, try to activate the first present agent
+    if (!state.activeAgent) {
+        if (presentAgentNames.length > 0) {
+            return { type: 'set_active_agent', activeAgent: presentAgentNames[0] }
+        }
+        throw new Error("Tried to retreat when no agents were active")
+    }
+
+    // Try to activate the next present agent
+    const idx = presentAgentNames.indexOf(state.activeAgent)
+    if (idx < 0) {
+        throw new Error("Current agent is not present")
+    } else if (idx + 1 < presentAgentNames.length) {
+        return { type: 'set_active_agent', activeAgent: presentAgentNames[idx + 1] }
+    }
+
+    // If nothing else worked, advance the frame and reset the agent
+    return { type: 'retreat_frame_and_set_agent', activeAgent: presentAgentNames[0] }
+}
+
 export default function reducer(state, action) {
     switch (action.type) {
         case 'set_loading_finished':
@@ -63,6 +109,18 @@ export default function reducer(state, action) {
             return updateFrame(state, action.agentName, { isBlurred: action.isBlurred })
         case 'set_agent_is_obscured':
             return updateFrame(state, action.agentName, { isObscured: action.isObscured })
+        case 'step_advance':
+            return reducer(state, stepAdvanceDispatch(state))
+        case 'step_retreat':
+            return reducer(state, stepRetreatDispatch(state))
+        case 'advance_frame_and_set_agent':
+            return reducer(
+                reducer(state, { type: 'next_frame' }),
+                { type: 'set_active_agent', activeAgent: action.activeAgent })
+        case 'retreat_frame_and_set_agent':
+            return reducer(
+                reducer(state, { type: 'previous_frame' }),
+                { type: 'set_active_agent', activeAgent: action.activeAgent })
         default:
             throw new Error("Unknown reducer action")
     }

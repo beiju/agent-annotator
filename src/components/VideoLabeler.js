@@ -80,20 +80,20 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         }
     }, [image, state])
 
-    // const [preloadLink, setPreloadLink] = useState(null)
-    // useEffect(() => {
-    //     const link = document.createElement('link')
-    //     link.rel = 'preload'
-    //     link.as = 'image'
-    //     document.head.appendChild(link)
-    //     setPreloadLink(link)
-    //     return () => document.head.removeChild(link)
-    // }, [])
-    //
-    // useEffect(() => {
-    //     if (!preloadLink) return
-    //     preloadLink.src = getSrcForFrame(sample.data, state.activeFrame + 1)
-    // }, [preloadLink, sample.data, state.activeFrame])
+    const [preloadLink, setPreloadLink] = useState(null)
+    useEffect(() => {
+        const link = document.createElement('link')
+        link.rel = 'preload'
+        link.as = 'image'
+        document.head.appendChild(link)
+        setPreloadLink(link)
+        return () => document.head.removeChild(link)
+    }, [])
+
+    useEffect(() => {
+        if (!preloadLink) return
+        preloadLink.src = getSrcForFrame(sample.data, state.activeFrame + 1)
+    }, [preloadLink, sample.data, state.activeFrame])
 
     function getAgentLocation(state, agent) {
         console.assert(typeof agent === "string")

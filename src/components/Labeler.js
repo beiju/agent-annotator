@@ -46,9 +46,9 @@ export default function Labeler() {
                 case '`':
                     return dispatch({ type: 'active_agent_toggle_present' })
                 case ' ':
-                    return dispatch({ type: 'next_frame' })
+                    return dispatch({ type: 'step_advance' })
                 case 'b':
-                    return dispatch({ type: 'previous_frame' })
+                    return dispatch({ type: 'step_retreat' })
                 default:
                     break
             }
