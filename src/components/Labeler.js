@@ -6,7 +6,6 @@ import { VideoLabeler } from "./VideoLabeler"
 import reducer from "../reducer"
 import { LabelsDispatch } from "./labels"
 
-import agents from "../agents.json"
 const defaultState = {
     loading: true,
     activeFrame: 1,
@@ -35,24 +34,52 @@ export default function Labeler() {
 
     useEffect(() => {
         function listener(event) {
-            if (event.code.startsWith('Digit') && event.key <= agents.length) {
-                return dispatch({
-                    type: 'set_active_agent',
-                    activeAgent: agents[event.key - 1].name
-                })
-            }
-
             switch (event.key) {
-                case '`':
-                    return dispatch({ type: 'active_agent_toggle_present' })
+                // Changing frames
                 case ' ':
                     return dispatch({ type: 'step_advance' })
                 case 'b':
                     return dispatch({ type: 'step_retreat' })
+
+                // Setting quality
+                case 'r':
+                    return dispatch({ type: 'toggle_active_agent_is_blurred' })
+                case 'f':
+                    return dispatch({ type: 'toggle_active_agent_is_obscured' })
+
+                // Rotating
+                case 'q':
+                    return dispatch({ type: 'rotate_active_agent', by: 0.01 })
+                case 'Q':
+                    return dispatch({ type: 'rotate_active_agent', by: 0.1 })
+                case 'e':
+                    return dispatch({ type: 'rotate_active_agent', by: -0.01 })
+                case 'E':
+                    return dispatch({ type: 'rotate_active_agent', by: -0.1 })
+
+                // Translating
+                case 'w':
+                    return dispatch({ type: 'move_active_agent', y: -1 })
+                case 'W':
+                    return dispatch({ type: 'move_active_agent', y: -10 })
+                case 'a':
+                    return dispatch({ type: 'move_active_agent', x: -1 })
+                case 'A':
+                    return dispatch({ type: 'move_active_agent', x: -10 })
+                case 's':
+                    return dispatch({ type: 'move_active_agent', y: 1 })
+                case 'S':
+                    return dispatch({ type: 'move_active_agent', y: 10 })
+                case 'd':
+                    return dispatch({ type: 'move_active_agent', x: 1 })
+                case 'D':
+                    return dispatch({ type: 'move_active_agent', x: 10 })
+
                 default:
                     break
             }
         }
+
         document.addEventListener('keypress', listener)
         return () => document.removeEventListener('keypress', listener)
     }, [])

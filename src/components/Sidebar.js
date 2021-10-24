@@ -60,7 +60,7 @@ function SidebarAgentAnnotation({ state, agent, label }) {
                 id={`agent-${agent.name}-blurred`}
                 label={"Blurred"}
                 checked={label?.isBlurred ?? false}
-                onClick={event => dispatch({
+                onChange={event => dispatch({
                     type: 'set_agent_is_blurred',
                     agentName: agent.name,
                     isBlurred: event.currentTarget.checked
@@ -70,7 +70,7 @@ function SidebarAgentAnnotation({ state, agent, label }) {
                 id={`agent-${agent.name}-obscured`}
                 label={"Obscured"}
                 checked={label?.isObscured ?? false}
-                onClick={event => dispatch({
+                onChange={event => dispatch({
                     type: 'set_agent_is_obscured',
                     agentName: agent.name,
                     isObscured: event.currentTarget.checked
@@ -89,12 +89,16 @@ function SidebarAgentAnnotations({ state }) {
             {agents.map(agent =>
                 state.agentPresent[agent.name] &&
                 <SidebarAgentAnnotation
+                    key={agent.name}
                     state={state}
                     agent={agent}
                     label={state.frames[state.activeFrame]?.[agent.name]}
                 />
             )}
         </ul>
+        {Object.values(state.agentPresent).every(x => !x) && <p className="text-center mx-2">
+            Use the checkboxes below to select the agents that are present in this video
+        </p>}
     </div>
 }
 

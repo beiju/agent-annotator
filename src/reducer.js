@@ -81,12 +81,21 @@ export default function reducer(state, action) {
                 ...state,
                 agentPresent: { ...state.agentPresent, [state.activeAgent]: !state.agentPresent[state.activeAgent] }
             }
-        case 'move_agent':
+        case 'set_agent_position':
             return updateFrame(state, action.agentName, { x: action.x, y: action.y })
         case 'rotate_agent':
             return updateFrame(state, action.agentName, agent => ({
                 angle: normalizeAngle((agent.angle || 0) + action.by)
             }))
+        case 'rotate_active_agent':
+            return reducer(state, { type: 'rotate_agent', agentName: state.activeAgent, by: action.by})
+        case 'move_agent':
+            return updateFrame(state, action.agentName, agent => ({
+                x: (agent.x || 0) + (action.x || 0),
+                y: (agent.y || 0) + (action.y || 0),
+            }))
+        case 'move_active_agent':
+            return reducer(state, { type: 'move_agent', agentName: state.activeAgent, x: action.x, y: action.y })
         case 'next_frame':
             if (state.loading) return state
             return {
@@ -107,8 +116,12 @@ export default function reducer(state, action) {
             }
         case 'set_agent_is_blurred':
             return updateFrame(state, action.agentName, { isBlurred: action.isBlurred })
+        case 'toggle_active_agent_is_blurred':
+            return updateFrame(state, state.activeAgent, current => ({ isBlurred: !current.isBlurred }))
         case 'set_agent_is_obscured':
             return updateFrame(state, action.agentName, { isObscured: action.isObscured })
+        case 'toggle_active_agent_is_obscured':
+            return updateFrame(state, state.activeAgent, current => ({ isObscured: !current.isObscured }))
         case 'step_advance':
             return reducer(state, stepAdvanceDispatch(state))
         case 'step_retreat':

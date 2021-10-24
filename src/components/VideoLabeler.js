@@ -35,7 +35,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
             canvasRef.current.width = element.naturalWidth
             canvasRef.current.height = element.naturalHeight
             setImage(element)
-            dispatch({ type: 'set_loading_finished' })
+            dispatch({ type: 'set_loading_finished', width: element.naturalWidth, height: element.naturalHeight })
         }
 
         element.addEventListener('load', imageLoaded)
@@ -80,6 +80,22 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         }
     }, [image, state])
 
+    useEffect(() => {
+        const activeAgentLabel = state.frames[state.activeFrame]?.[state.activeAgent] ?? {}
+
+        if (dispatch && image && (
+            typeof activeAgentLabel.x === "undefined" ||
+            typeof activeAgentLabel.y === "undefined")
+        ) {
+            dispatch({
+                type: 'set_agent_position',
+                agentName: state.activeAgent,
+                x: activeAgentLabel.x ?? image.naturalWidth / 2,
+                y: activeAgentLabel.y ?? image.naturalHeight / 2,
+            })
+        }
+    }, [dispatch, state, image])
+
     const [preloadLink, setPreloadLink] = useState(null)
     useEffect(() => {
         const link = document.createElement('link')
@@ -99,7 +115,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         console.assert(typeof agent === "string")
         const canvas = canvasRef.current
         if (!canvas) throw new Error("Canvas ref was cleared")
-        
+
         const agentLabel = state.frames[state.activeFrame]?.[agent] ?? {}
         const x = agentLabel.x ?? canvas.width / 2
         const y = agentLabel.y ?? canvas.height / 2
@@ -174,8 +190,8 @@ export function VideoLabeler({ sample, state, nextVideo }) {
             const xDelta = event.nativeEvent.offsetX * (canvas.height / canvas.clientHeight) - drag.mouse.x
             const yDelta = event.nativeEvent.offsetY * (canvas.width / canvas.clientWidth) - drag.mouse.y
 
-            dispatch({ 
-                type: 'move_agent',
+            dispatch({
+                type: 'set_agent_position',
                 agentName: drag.agentName,
                 x: xDelta + drag.agent.x,
                 y: yDelta + drag.agent.y,
@@ -185,8 +201,9 @@ export function VideoLabeler({ sample, state, nextVideo }) {
 
     function onCanvasWheel(event) {
         const { x, y } = eventToImageCoordinates(event)
-        // If dragging, rotate the agent being dragged. Otherwise, rotate the hovered agent.
-        const agentName = isDragging() ? drag.agentName : getHoveredAgent(x, y)
+        // If dragging, rotate the agent being dragged. Otherwise, rotate the hovered agent. Otherwise, rotate the
+        // selected agent
+        const agentName = (isDragging() ? drag.agentName : getHoveredAgent(x, y)) || state.activeAgent
         if (agentName) {
             if (agentName !== state.activeAgent) {
                 dispatch({
