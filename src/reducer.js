@@ -118,6 +118,12 @@ export default function reducer(state, action) {
                 loading: true,
                 activeFrame: state.activeFrame > 1 ? state.activeFrame - 1 : state.activeFrame
             }
+        case 'jump_to_frame':
+            return {
+                ...state,
+                loading: true,
+                activeFrame: action.frame
+            }
         case 'set_agent_is_blurred':
             return updateFrame(state, action.agentName, { isBlurred: action.isBlurred })
         case 'toggle_active_agent_is_blurred':

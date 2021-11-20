@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useCallback, useState } from "react"
+import { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { Col } from "react-bootstrap"
 import point_in_polygon from "robust-point-in-polygon"
 
@@ -8,6 +8,7 @@ import './VideoLabeler.css'
 import { LabelsDispatch } from "./labels"
 import { Timeline } from "./Timeline"
 import { Toolbar } from "./Toolbar"
+import { getSrcForFrame } from "./util"
 
 function transform(x, y, angle) {
     return new DOMMatrix([
@@ -15,11 +16,6 @@ function transform(x, y, angle) {
         Math.sin(angle), Math.cos(angle),
         x, y
     ])
-}
-
-function getSrcForFrame(sampleData, activeFrame) {
-    if (!sampleData) return ""
-    return sampleData.replace(".mp4", `/${String(activeFrame).padStart(3, '0')}.jpg`)
 }
 
 const DISH_MASK = Symbol('DISH_MASK')
