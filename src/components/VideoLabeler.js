@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from "react"
+import { useContext, useEffect, useMemo, useCallback, useState } from "react"
 import { Col } from "react-bootstrap"
 import point_in_polygon from "robust-point-in-polygon"
 
@@ -22,18 +22,22 @@ function getSrcForFrame(sampleData, activeFrame) {
     return sampleData.replace(".mp4", `/${String(activeFrame).padStart(3, '0')}.jpg`)
 }
 
+const DISH_MASK = Symbol('DISH_MASK')
+
 export function VideoLabeler({ sample, state, nextVideo }) {
     const dispatch = useContext(LabelsDispatch)
 
     /** @type {React.MutableRefObject<HTMLCanvasElement>} */
-    const canvasRef = useRef()
+    const [canvas, setCanvas] = useState(null)
     const [image, setImage] = useState(null)
     useEffect(() => {
+        if (!canvas) return
+
         const element = document.createElement('img')
 
         function imageLoaded() {
-            canvasRef.current.width = element.naturalWidth
-            canvasRef.current.height = element.naturalHeight
+            canvas.width = element.naturalWidth
+            canvas.height = element.naturalHeight
             setImage(element)
             dispatch({ type: 'set_loading_finished' })
         }
@@ -43,15 +47,69 @@ export function VideoLabeler({ sample, state, nextVideo }) {
 
         // The element will be garbage collected as long as this event listener isn't around creating a cycle
         return () => element.removeEventListener('loadeddata', imageLoaded)
-    }, [dispatch, sample.data, state.activeFrame])
+    }, [canvas, dispatch, sample.data, state.activeFrame])
 
+    const getDishMaskLocation = useCallback(function (state) {
+        if (!canvas) throw new Error("Canvas ref was cleared")
+
+        const x = state.dishMask?.x ?? canvas.width / 2
+        const y = state.dishMask?.y ?? canvas.height / 2
+        const radius = state.dishMask?.radius ?? 500
+
+        return { x, y, radius }
+    }, [canvas])
+
+    // This only exists to slap a saved state in the drawing state, for use in un-clipping
+    useMemo(() => {
+        if (!canvas) return
+
+        const ctx = canvas.getContext('2d')
+        ctx.save()
+    }, [canvas])
 
     useMemo(() => {
-        if (!canvasRef.current) return
+        if (!canvas) return
+
+        const ctx = canvas.getContext('2d')
+
+        ctx.restore()
+        ctx.save()
+
+        ctx.fillStyle = "black"
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+        ctx.beginPath()
+        const { x, y, radius } = getDishMaskLocation(state)
+        ctx.arc(x, y, radius, 0, Math.PI * 2)
+        ctx.clip()
+
+    }, [canvas, getDishMaskLocation, state])
+
+
+    const getAgentLocation = useCallback(function (state, agent) {
+        if (!canvas) throw new Error("Canvas ref was cleared")
+
+        if (agent === DISH_MASK) {
+            return getDishMaskLocation(state)
+        }
+
+        console.assert(typeof agent === "string")
+
+        const agentLabel = state.frames[state.activeFrame]?.[agent] ?? {}
+        const x = agentLabel.x ?? canvas.width / 2
+        const y = agentLabel.y ?? canvas.height / 2
+        const angle = agentLabel.angle ?? 0
+
+        return { x, y, angle }
+    }, [canvas, getDishMaskLocation])
+
+    useMemo(() => {
+        if (!canvas) return
         if (!image) return
 
-        const ctx = canvasRef.current.getContext('2d')
+        const ctx = canvas.getContext('2d')
         ctx.setTransform(1, 0, 0, 1, 0, 0)
+
         ctx.drawImage(image, 0, 0)
 
         ctx.lineWidth = 2
@@ -76,7 +134,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
             ctx.stroke()
             ctx.fill()
         }
-    }, [image, state])
+    }, [canvas, getAgentLocation, image, state])
 
     useEffect(() => {
         const activeAgentLabel = state.frames[state.activeFrame]?.[state.activeAgent] ?? {}
@@ -101,21 +159,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         new Image().src = getSrcForFrame(sample.data, state.activeFrame + 3)
     }, [sample.data, state.activeFrame])
 
-    function getAgentLocation(state, agent) {
-        console.assert(typeof agent === "string")
-        const canvas = canvasRef.current
-        if (!canvas) throw new Error("Canvas ref was cleared")
-
-        const agentLabel = state.frames[state.activeFrame]?.[agent] ?? {}
-        const x = agentLabel.x ?? canvas.width / 2
-        const y = agentLabel.y ?? canvas.height / 2
-        const angle = agentLabel.angle ?? 0
-
-        return { x, y, angle }
-    }
-
     function eventToImageCoordinates(event) {
-        const canvas = canvasRef.current
         if (!canvas) throw new Error("Canvas ref was cleared")
 
         const x = event.nativeEvent.offsetX * (canvas.height / canvas.clientHeight)
@@ -158,8 +202,20 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         return null
     }
 
+    function isDishMaskHovered(mouseX, mouseY) {
+        if (state.dishMask?.locked) return false
+        const {x: dishX, y: dishY, radius } = getDishMaskLocation(state)
+        const dist_sqr = (mouseX - dishX) ** 2 + (mouseY - dishY) ** 2
+        return dist_sqr > radius ** 2
+    }
+
     function onCanvasMousedown(event) {
         const { x, y } = eventToImageCoordinates(event)
+        if (isDishMaskHovered(x, y)) {
+            startDrag(x, y, DISH_MASK)
+        }
+
+
         const hoveredAgent = getHoveredAgent(x, y)
         if (hoveredAgent) {
             dispatch({
@@ -171,30 +227,54 @@ export function VideoLabeler({ sample, state, nextVideo }) {
     }
 
     function isDragging() {
-        return drag && drag.agentName === state.activeAgent
+        return drag && (drag.agentName === state.activeAgent || drag.agentName === DISH_MASK)
     }
 
     function onCanvasMousemove(event) {
         if (isDragging()) {
-            const canvas = canvasRef.current
             const xDelta = event.nativeEvent.offsetX * (canvas.height / canvas.clientHeight) - drag.mouse.x
             const yDelta = event.nativeEvent.offsetY * (canvas.width / canvas.clientWidth) - drag.mouse.y
 
-            dispatch({
-                type: 'set_agent_position',
-                agentName: drag.agentName,
-                x: xDelta + drag.agent.x,
-                y: yDelta + drag.agent.y,
-            })
+            if (drag.agentName === DISH_MASK) {
+                dispatch({
+                    type: 'set_dish_mask_position',
+                    x: xDelta + drag.agent.x,
+                    y: yDelta + drag.agent.y,
+                })
+            } else {
+                dispatch({
+                    type: 'set_agent_position',
+                    agentName: drag.agentName,
+                    x: xDelta + drag.agent.x,
+                    y: yDelta + drag.agent.y,
+                })
+            }
         }
+    }
+
+    function agentToScroll(x, y) {
+        // If dragging, rotate the agent being dragged. Otherwise, rotate the hovered agent (or dish). Otherwise,
+        // scroll the selected agent
+
+        if (isDragging()) return drag.agentName
+
+        if (isDishMaskHovered(x, y)) return DISH_MASK
+
+        return getHoveredAgent(x, y) ?? state.activeAgent
     }
 
     function onCanvasWheel(event) {
         const { x, y } = eventToImageCoordinates(event)
-        // If dragging, rotate the agent being dragged. Otherwise, rotate the hovered agent. Otherwise, rotate the
-        // selected agent
-        const agentName = (isDragging() ? drag.agentName : getHoveredAgent(x, y)) || state.activeAgent
-        if (agentName) {
+
+        const agentName = agentToScroll(x, y)
+
+        if (agentName === DISH_MASK) {
+            const { radius } = getDishMaskLocation(state)
+            dispatch({
+                type: 'set_dish_mask_radius',
+                radius: Math.max(10, radius + event.deltaY / (event.shiftKey ? 100 : 10)),
+            })
+        } else if (agentName) {
             if (agentName !== state.activeAgent) {
                 dispatch({
                     type: 'set_active_agent',
@@ -215,7 +295,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         <div className="labeler-canvas-container">
             <canvas
                 className="labeler-canvas"
-                ref={canvasRef}
+                ref={setCanvas}
                 onMouseDown={onCanvasMousedown}
                 onMouseUp={endDrag}
                 onMouseMove={onCanvasMousemove}

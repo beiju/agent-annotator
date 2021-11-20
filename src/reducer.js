@@ -29,8 +29,10 @@ function stepAdvanceDispatch(state) {
     if (!state.activeAgent) {
         if (presentAgentNames.length > 0) {
             return { type: 'set_active_agent', activeAgent: presentAgentNames[0] }
+        } else {
+            // If there aren't any present agents, just go to the next frame
+            return { type: 'next_frame' }
         }
-        throw new Error("Tried to advance when no agents were active")
     }
 
     // Try to activate the next present agent
@@ -138,6 +140,38 @@ export default function reducer(state, action) {
             return reducer(
                 reducer(state, { type: 'previous_frame' }),
                 { type: 'set_active_agent', activeAgent: action.activeAgent })
+        case 'set_dish_mask_position':
+            return {
+                ...state,
+                dishMask: {
+                    ...state.dishMask,
+                    x: action.x,
+                    y: action.y,
+                }
+            }
+        case 'set_dish_mask_radius':
+            return {
+                ...state,
+                dishMask: {
+                    ...state.dishMask,
+                    radius: action.radius,
+                }
+            }
+        case 'reset_dish_mask':
+            return {
+                ...state,
+                dishMask: null
+            }
+
+        case 'set_dish_mask_locked':
+            return {
+                ...state,
+                dishMask: {
+                    ...state.dishMask,
+                    locked: action.value
+                }
+            }
+
         default:
             throw new Error("Unknown reducer action")
     }

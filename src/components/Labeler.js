@@ -15,7 +15,7 @@ const defaultState = {
 }
 
 export default function Labeler() {
-    const [state, dispatch] = useReducer(reducer, defaultState)
+    const [state, dispatch] = useReducer(reducer, defaultState, i => i)
 
     const [sample, setSample] = useState(null)
     useEffect(() => {

@@ -1,3 +1,3 @@
 import { createContext } from "react"
 
-export const LabelsDispatch = createContext(null)
+export const LabelsDispatch = createContext({})
