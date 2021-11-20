@@ -1,7 +1,7 @@
 import Labeler from "./components/Labeler"
 
 import './App.css'
-import './bootstrap.scss';
+import 'bootstrap/dist/css/bootstrap.css';
 
 function App() {
   return (

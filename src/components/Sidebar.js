@@ -22,7 +22,7 @@ function SidebarAgentsPresent({ state }) {
                         type: 'set_active_agent',
                         activeAgent: agent.name
                     })}
-                    checked={state.agentPresent[agent.name] ?? false}
+                    checked={state.agentPresent?.[agent.name] ?? false}
                     onChange={event => dispatch({
                         type: 'set_agent_present',
                         agent: agent.name,
@@ -87,12 +87,12 @@ function SidebarAgentAnnotations({ state }) {
 
         <ul className="list-group list-group-flush">
             {agents.map(agent =>
-                state.agentPresent[agent.name] &&
+                state.agentPresent?.[agent.name] &&
                 <SidebarAgentAnnotation
                     key={agent.name}
                     state={state}
                     agent={agent}
-                    label={state.frames[state.activeFrame]?.[agent.name]}
+                    label={state.frames?.[state.activeFrame]?.[agent.name]}
                 />
             )}
         </ul>
@@ -104,7 +104,7 @@ function SidebarAgentAnnotations({ state }) {
 
 export function Sidebar({ state }) {
 
-    return (<Col sm={2} className="bg-light h-100 border-end border-dark d-flex flex-column gx-0">
+    return (<Col md={4} lg={3} xl={2} className="bg-light h-100 border-end border-dark d-flex flex-column gx-0">
         <SidebarAgentAnnotations state={state} />
         <SidebarAgentsPresent state={state} />
     </Col>)

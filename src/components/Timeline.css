@@ -3,8 +3,17 @@
     height: 16px;
     background-color: rgb(233, 236, 239);
     border-radius: 4px;
+    overflow: hidden; /* makes children obey border radius */
+}
+
+.timeline-component {
+    min-width: 1px;
 }
 
 .timeline-component-labeled {
     background-color: rgb(40, 167, 69);
+}
+
+.timeline-component-active {
+    background-color: rgb(0, 0, 0);
 }

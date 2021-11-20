@@ -20,7 +20,10 @@ export function Toolbar({ sample, state, nextVideo }) {
                     onClick={() => dispatch({ type: 'previous_frame' })}
                     disabled={state.activeFrame <= 1}
                 ><AiFillStepBackward /></Button>
-                <Button onClick={() => dispatch({ type: 'next_frame' })}><AiFillStepForward /></Button>
+                <Button
+                    onClick={() => dispatch({ type: 'next_frame' })}
+                    disabled={state.activeFrame >= sample.numFrames}
+                ><AiFillStepForward /></Button>
             </ButtonGroup>
             <div>
                 <Button

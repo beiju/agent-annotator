@@ -35,7 +35,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
             canvasRef.current.width = element.naturalWidth
             canvasRef.current.height = element.naturalHeight
             setImage(element)
-            dispatch({ type: 'set_loading_finished', width: element.naturalWidth, height: element.naturalHeight })
+            dispatch({ type: 'set_loading_finished' })
         }
 
         element.addEventListener('load', imageLoaded)
@@ -49,8 +49,6 @@ export function VideoLabeler({ sample, state, nextVideo }) {
     useMemo(() => {
         if (!canvasRef.current) return
         if (!image) return
-
-        console.log("Drawing frame")
 
         const ctx = canvasRef.current.getContext('2d')
         ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -96,20 +94,12 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         }
     }, [dispatch, state, image])
 
-    const [preloadLink, setPreloadLink] = useState(null)
+    // Preload next 3 frames
     useEffect(() => {
-        const link = document.createElement('link')
-        link.rel = 'preload'
-        link.as = 'image'
-        document.head.appendChild(link)
-        setPreloadLink(link)
-        return () => document.head.removeChild(link)
-    }, [])
-
-    useEffect(() => {
-        if (!preloadLink) return
-        preloadLink.src = getSrcForFrame(sample.data, state.activeFrame + 1)
-    }, [preloadLink, sample.data, state.activeFrame])
+        new Image().src = getSrcForFrame(sample.data, state.activeFrame + 1)
+        new Image().src = getSrcForFrame(sample.data, state.activeFrame + 2)
+        new Image().src = getSrcForFrame(sample.data, state.activeFrame + 3)
+    }, [sample.data, state.activeFrame])
 
     function getAgentLocation(state, agent) {
         console.assert(typeof agent === "string")
@@ -222,7 +212,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
 
     return (<Col className="h-100 d-flex flex-column">
         <Toolbar sample={sample} state={state} nextVideo={nextVideo} />
-        <div className="flex-grow-1">
+        <div className="labeler-canvas-container">
             <canvas
                 className="labeler-canvas"
                 ref={canvasRef}
@@ -231,7 +221,6 @@ export function VideoLabeler({ sample, state, nextVideo }) {
                 onMouseMove={onCanvasMousemove}
                 onWheel={onCanvasWheel}
             />
-
             <Timeline sample={sample} state={state} />
         </div>
     </Col>)

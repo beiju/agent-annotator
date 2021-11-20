@@ -70,6 +70,9 @@ function stepRetreatDispatch(state) {
 
 export default function reducer(state, action) {
     switch (action.type) {
+        case 'set_state':
+            // If the new state is for the same sample as the old state, don't overwrite. Otherwise, overwrite.
+            return action.state.data === state.data ? state : action.state
         case 'set_loading_finished':
             return { ...state, loading: false }
         case 'set_active_agent':
@@ -108,7 +111,6 @@ export default function reducer(state, action) {
                 }
             }
         case 'previous_frame':
-            if (state.loading) return state
             return {
                 ...state,
                 loading: true,
@@ -127,10 +129,12 @@ export default function reducer(state, action) {
         case 'step_retreat':
             return reducer(state, stepRetreatDispatch(state))
         case 'advance_frame_and_set_agent':
+            if (state.loading) return state
             return reducer(
                 reducer(state, { type: 'next_frame' }),
                 { type: 'set_active_agent', activeAgent: action.activeAgent })
         case 'retreat_frame_and_set_agent':
+            if (state.loading) return state
             return reducer(
                 reducer(state, { type: 'previous_frame' }),
                 { type: 'set_active_agent', activeAgent: action.activeAgent })

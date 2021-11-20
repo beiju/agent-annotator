@@ -15,22 +15,29 @@ const defaultState = {
 }
 
 export default function Labeler() {
+    const [state, dispatch] = useReducer(reducer, defaultState)
+
     const [sample, setSample] = useState(null)
     useEffect(() => {
-        Labelbox.currentAsset().subscribe(async sample => {
+        const subscription = Labelbox.currentAsset().subscribe(async sample => {
             if (sample) {
                 const url = sample.data.replace(".mp4", "/num_frames.txt")
 
                 const response = await fetch(url)
                 const text = await response.text()
                 sample.numFrames = parseInt(text, 10)
+
+                const parsedState = sample.label ? JSON.parse(sample.label) : defaultState
+                parsedState.data = sample.data
+                console.log("Restoring ", parsedState)
+                dispatch({ type: 'set_state', state: parsedState })
             }
 
             setSample(sample)
         })
-    }, [])
 
-    const [state, dispatch] = useReducer(reducer, defaultState)
+        return () => subscription.unsubscribe()
+    }, [])
 
     useEffect(() => {
         function listener(event) {
