@@ -14,6 +14,8 @@ const defaultState = {
     frames: {}
 }
 
+const NO_MATCH = Symbol("NO_MATCH")
+
 export default function Labeler() {
     const [state, dispatch] = useReducer(reducer, defaultState, i => i)
 
@@ -41,50 +43,55 @@ export default function Labeler() {
 
     useEffect(() => {
         function listener(event) {
-            switch (event.key) {
-                // Changing frames
-                case ' ':
-                    return dispatch({ type: 'step_advance' })
-                case 'b':
-                    return dispatch({ type: 'step_retreat' })
+            const ret = (() => {
+                switch (event.key) {
+                    // Changing frames
+                    case ' ':
+                        return dispatch({ type: 'step_advance' })
+                    case 'b':
+                        return dispatch({ type: 'step_retreat' })
 
-                // Setting quality
-                case 'r':
-                    return dispatch({ type: 'toggle_active_agent_is_blurred' })
-                case 'f':
-                    return dispatch({ type: 'toggle_active_agent_is_obscured' })
+                    // Setting quality
+                    case 'r':
+                        return dispatch({ type: 'toggle_active_agent_is_blurred' })
+                    case 'f':
+                        return dispatch({ type: 'toggle_active_agent_is_obscured' })
 
-                // Rotating
-                case 'q':
-                    return dispatch({ type: 'rotate_active_agent', by: 0.01 })
-                case 'Q':
-                    return dispatch({ type: 'rotate_active_agent', by: 0.1 })
-                case 'e':
-                    return dispatch({ type: 'rotate_active_agent', by: -0.01 })
-                case 'E':
-                    return dispatch({ type: 'rotate_active_agent', by: -0.1 })
+                    // Rotating
+                    case 'q':
+                        return dispatch({ type: 'rotate_active_agent', by: 0.01 })
+                    case 'Q':
+                        return dispatch({ type: 'rotate_active_agent', by: 0.1 })
+                    case 'e':
+                        return dispatch({ type: 'rotate_active_agent', by: -0.01 })
+                    case 'E':
+                        return dispatch({ type: 'rotate_active_agent', by: -0.1 })
 
-                // Translating
-                case 'w':
-                    return dispatch({ type: 'move_active_agent', y: -1 })
-                case 'W':
-                    return dispatch({ type: 'move_active_agent', y: -10 })
-                case 'a':
-                    return dispatch({ type: 'move_active_agent', x: -1 })
-                case 'A':
-                    return dispatch({ type: 'move_active_agent', x: -10 })
-                case 's':
-                    return dispatch({ type: 'move_active_agent', y: 1 })
-                case 'S':
-                    return dispatch({ type: 'move_active_agent', y: 10 })
-                case 'd':
-                    return dispatch({ type: 'move_active_agent', x: 1 })
-                case 'D':
-                    return dispatch({ type: 'move_active_agent', x: 10 })
+                    // Translating
+                    case 'w':
+                        return dispatch({ type: 'move_active_agent', y: -1 })
+                    case 'W':
+                        return dispatch({ type: 'move_active_agent', y: -10 })
+                    case 'a':
+                        return dispatch({ type: 'move_active_agent', x: -1 })
+                    case 'A':
+                        return dispatch({ type: 'move_active_agent', x: -10 })
+                    case 's':
+                        return dispatch({ type: 'move_active_agent', y: 1 })
+                    case 'S':
+                        return dispatch({ type: 'move_active_agent', y: 10 })
+                    case 'd':
+                        return dispatch({ type: 'move_active_agent', x: 1 })
+                    case 'D':
+                        return dispatch({ type: 'move_active_agent', x: 10 })
 
-                default:
-                    break
-            }
+                    default:
+                        break
+                }
+                return NO_MATCH
+            })()
+            if (ret !== NO_MATCH) event.preventDefault()
+            return ret
         }
 
         document.addEventListener('keypress', listener)

@@ -4,6 +4,8 @@ import agents from "../agents.json"
 import { useContext } from "react"
 import { LabelsDispatch } from "./labels"
 
+import "./Sidebar.css"
+
 function SidebarAgentsPresent({ state }) {
     const dispatch = useContext(LabelsDispatch)
     if (!dispatch) return null
@@ -28,13 +30,19 @@ function SidebarAgentsPresent({ state }) {
                         agent: agent.name,
                         isPresent: event.currentTarget.checked
                     })}
+                    flipped={state.agentFlipped?.[agent.name] ?? false}
+                    onFlip={event => dispatch({
+                        type: 'set_agent_flipped',
+                        agent: agent.name,
+                        isFlipped: event.currentTarget.checked
+                    })}
                 />
             ))}
         </ol>
     </div>
 }
 
-function SidebarAgentPresent({ agent, checked, onChange }) {
+function SidebarAgentPresent({ agent, checked, onChange, flipped, onFlip }) {
     return (<li>
         <Form.Check
             type="checkbox"
@@ -42,6 +50,14 @@ function SidebarAgentPresent({ agent, checked, onChange }) {
             label={agent.display_name}
             checked={checked}
             onChange={onChange}
+        />
+        <Form.Check
+            className="indented-checkbox"
+            type="checkbox"
+            id={agent.name + "-flip"}
+            label="Flip"
+            checked={flipped}
+            onChange={onFlip}
         />
     </li>)
 }

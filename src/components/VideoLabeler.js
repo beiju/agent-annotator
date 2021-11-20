@@ -10,12 +10,20 @@ import { Timeline } from "./Timeline"
 import { Toolbar } from "./Toolbar"
 import { getSrcForFrame } from "./util"
 
-function transform(x, y, angle) {
-    return new DOMMatrix([
+function transform(x, y, angle, flipped) {
+    const matrix = new DOMMatrix([
         Math.cos(angle), -Math.sin(angle),
         Math.sin(angle), Math.cos(angle),
         x, y
     ])
+    if (flipped) {
+        matrix.multiplySelf(new DOMMatrix([
+            1, 0,
+            0, -1,
+            0, 0,
+        ]))
+    }
+    return matrix
 }
 
 const DISH_MASK = Symbol('DISH_MASK')
@@ -121,8 +129,9 @@ export function VideoLabeler({ sample, state, nextVideo }) {
                 ctx.fillStyle = 'rgba(0,0,0,0.2)'
             }
             const { x, y, angle } = getAgentLocation(state, agent.name)
+            const flipped = state.agentFlipped?.[agent.name]
 
-            ctx.setTransform(transform(x, y, angle))
+            ctx.setTransform(transform(x, y, angle, flipped))
             ctx.beginPath()
             for (const [shapeX, shapeY] of agent.shape) {
                 ctx.lineTo(shapeX, shapeY)

@@ -81,6 +81,8 @@ export default function reducer(state, action) {
             return { ...state, activeAgent: action.activeAgent }
         case 'set_agent_present':
             return { ...state, agentPresent: { ...state.agentPresent, [action.agent]: action.isPresent } }
+        case 'set_agent_flipped':
+            return { ...state, agentFlipped: { ...state.agentFlipped, [action.agent]: action.isFlipped } }
         case 'active_agent_toggle_present':
             return {
                 ...state,
