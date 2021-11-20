@@ -24,16 +24,12 @@ export function VideoLabeler({ sample, state, nextVideo }) {
     const dispatch = useContext(LabelsDispatch)
 
     /** @type {React.MutableRefObject<HTMLCanvasElement>} */
-    const [canvas, setCanvas] = useState(null)
+    const [preloadCanvas, setPreloadCanvas] = useState(null)
     const [image, setImage] = useState(null)
     useEffect(() => {
-        if (!canvas) return
-
         const element = document.createElement('img')
 
         function imageLoaded() {
-            canvas.width = element.naturalWidth
-            canvas.height = element.naturalHeight
             setImage(element)
             dispatch({ type: 'set_loading_finished' })
         }
@@ -42,29 +38,34 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         element.src = getSrcForFrame(sample.data, state.activeFrame)
 
         // The element will be garbage collected as long as this event listener isn't around creating a cycle
-        return () => element.removeEventListener('loadeddata', imageLoaded)
-    }, [canvas, dispatch, sample.data, state.activeFrame])
+        return () => element.removeEventListener('load', imageLoaded)
+    }, [dispatch, sample.data, state.activeFrame])
 
-    const getDishMaskLocation = useCallback(function (state) {
-        if (!canvas) throw new Error("Canvas ref was cleared")
+    const dishMaskLocation = useMemo(() => {
+        if (!image) return null
 
-        const x = state.dishMask?.x ?? canvas.width / 2
-        const y = state.dishMask?.y ?? canvas.height / 2
+        const x = state.dishMask?.x ?? image.naturalWidth / 2
+        const y = state.dishMask?.y ?? image.naturalHeight / 2
         const radius = state.dishMask?.radius ?? 500
 
         return { x, y, radius }
-    }, [canvas])
+    }, [image, state])
 
-    // This only exists to slap a saved state in the drawing state, for use in un-clipping
-    useMemo(() => {
+    const [canvas, setCanvas] = useState(null)
+    useEffect(() => {
+        if (preloadCanvas && image) {
+            preloadCanvas.width = image.naturalWidth
+            preloadCanvas.height = image.naturalHeight
+
+            preloadCanvas.getContext('2d').save()
+
+            setCanvas(preloadCanvas)
+        }
+    }, [preloadCanvas, image])
+
+    useEffect(() => {
         if (!canvas) return
-
-        const ctx = canvas.getContext('2d')
-        ctx.save()
-    }, [canvas])
-
-    useMemo(() => {
-        if (!canvas) return
+        if (!dishMaskLocation) return
 
         const ctx = canvas.getContext('2d')
 
@@ -75,18 +76,17 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         ctx.fillRect(0, 0, canvas.width, canvas.height)
 
         ctx.beginPath()
-        const { x, y, radius } = getDishMaskLocation(state)
+        const { x, y, radius } = dishMaskLocation
         ctx.arc(x, y, radius, 0, Math.PI * 2)
         ctx.clip()
-
-    }, [canvas, getDishMaskLocation, state])
+    }, [canvas, dishMaskLocation])
 
 
     const getAgentLocation = useCallback(function (state, agent) {
         if (!canvas) throw new Error("Canvas ref was cleared")
 
         if (agent === DISH_MASK) {
-            return getDishMaskLocation(state)
+            return dishMaskLocation
         }
 
         console.assert(typeof agent === "string")
@@ -97,9 +97,9 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         const angle = agentLabel.angle ?? 0
 
         return { x, y, angle }
-    }, [canvas, getDishMaskLocation])
+    }, [canvas, dishMaskLocation])
 
-    useMemo(() => {
+    useEffect(() => {
         if (!canvas) return
         if (!image) return
 
@@ -200,7 +200,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
 
     function isDishMaskHovered(mouseX, mouseY) {
         if (state.dishMask?.locked) return false
-        const {x: dishX, y: dishY, radius } = getDishMaskLocation(state)
+        const { x: dishX, y: dishY, radius } = dishMaskLocation
         const dist_sqr = (mouseX - dishX) ** 2 + (mouseY - dishY) ** 2
         return dist_sqr > radius ** 2
     }
@@ -265,7 +265,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         const agentName = agentToScroll(x, y)
 
         if (agentName === DISH_MASK) {
-            const { radius } = getDishMaskLocation(state)
+            const { radius } = dishMaskLocation
             dispatch({
                 type: 'set_dish_mask_radius',
                 radius: Math.max(10, radius + event.deltaY / (event.shiftKey ? 100 : 10)),
@@ -291,7 +291,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         <div className="labeler-canvas-container">
             <canvas
                 className="labeler-canvas"
-                ref={setCanvas}
+                ref={setPreloadCanvas}
                 onMouseDown={onCanvasMousedown}
                 onMouseUp={endDrag}
                 onMouseMove={onCanvasMousemove}

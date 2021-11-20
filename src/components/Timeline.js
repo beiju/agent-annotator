@@ -1,7 +1,7 @@
 import { forwardRef, useContext, useEffect, useMemo, useState } from "react"
 
 import "./Timeline.css"
-import { OverlayTrigger, Popover } from "react-bootstrap"
+import { Button, Modal, OverlayTrigger, Popover } from "react-bootstrap"
 import { getSrcForFrame } from "./util"
 import { LabelsDispatch } from "./labels"
 
@@ -14,16 +14,16 @@ function getComponentType(state, i) {
 const UpdatingPopover = forwardRef(
     ({ popper, children, show: _, ...props }, ref) => {
         useEffect(() => {
-            popper.scheduleUpdate();
-        }, [children, popper]);
+            popper.scheduleUpdate()
+        }, [children, popper])
 
         return (
             <Popover ref={ref} body {...props}>
                 {children}
             </Popover>
-        );
+        )
     },
-);
+)
 
 
 export function Timeline({ sample, state }) {
@@ -50,7 +50,8 @@ export function Timeline({ sample, state }) {
     }, [sample.numFrames, state])
 
     const [hoverPositionPercent, setHoverPositionPercent] = useState(null)
-    const [isScrubbing, setIsScrubbing] = useState(false)
+    const [wantsToNavigateToFrame, setWantsToNavigateToFrame] = useState(null)
+
     function onMouseMove(event) {
         const bounds = event.currentTarget.getBoundingClientRect()
         const pct = (event.clientX - bounds.x) / bounds.width
@@ -60,16 +61,7 @@ export function Timeline({ sample, state }) {
         event.preventDefault()
     }
 
-    function onMouseDown() {
-        setIsScrubbing(true)
-    }
-
-    function onMouseUp() {
-        setIsScrubbing(false)
-    }
-
     function onMouseLeave() {
-        setIsScrubbing(false)
         setHoverPositionPercent(null)
     }
 
@@ -77,37 +69,57 @@ export function Timeline({ sample, state }) {
     const hoverPositionFrame = hoverPositionPercent === null ? null :
         Math.min(Math.floor(hoverPositionPercent * sample.numFrames), sample.numFrames - 1)
 
-    useEffect(() => {
-        if (isScrubbing) {
-            dispatch({ type: 'jump_to_frame', frame: hoverPositionFrame })
-        }
-    }, [isScrubbing, hoverPositionFrame, dispatch])
+    function onClick() {
+        setWantsToNavigateToFrame(hoverPositionFrame)
+    }
 
     // This noinspection is because WebStorm thinks all arguments to OverlayTrigger are required, but most are optional
     // noinspection RequiredAttributes
-    return (<div className="timeline"
+    return (<>
+        <Modal show={wantsToNavigateToFrame !== null} onHide={() => setWantsToNavigateToFrame(null)}>
+            <Modal.Header closeButton>
+                <Modal.Title>Jump to frame {wantsToNavigateToFrame}?</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <p>
+                    You will automatically start annotating at this position. Removing annotations is not yet supported,
+                    so be sure this is the frame you want.
+                </p>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button onClick={() => setWantsToNavigateToFrame(null)} variant="secondary">Cancel</Button>
+                <Button onClick={() => {
+                    dispatch({ type: 'jump_to_frame', frame: wantsToNavigateToFrame })
+                    setWantsToNavigateToFrame(null)
+                }}
+                        variant="primary">Jump to frame</Button>
+            </Modal.Footer>
+        </Modal>
+
+        <div className="timeline"
                  onMouseMove={onMouseMove}
-                 onMouseDown={onMouseDown}
-                 onMouseUp={onMouseUp}
-                 onMouseLeave={onMouseLeave}>
-        {hoverPositionFrame !== null && <OverlayTrigger show={true} placement={'top'} overlay={
-            <UpdatingPopover className="p-0">
-                <img
-                    src={getSrcForFrame(sample.data, hoverPositionFrame)}
-                    alt={`Frame ${hoverPositionFrame}`}
-                    height={100}
-                />
-            </UpdatingPopover>
-        }>
-            <div className="timeline-cursor" style={{
-                width: `min(2px, ${100 / sample.numFrames}%)`,
-                left: `${100 * hoverPositionFrame / sample.numFrames}%`,
-            }} />
-        </OverlayTrigger>}
-        {components.map(({ componentType, componentLength }, i) => (
-            <div key={i}
-                 className={`timeline-component timeline-component-${componentType}`}
-                 style={{ flexGrow: componentLength }} />
-        ))}
-    </div>)
+                 onMouseLeave={onMouseLeave}
+                 onClick={onClick}>
+
+            {hoverPositionFrame !== null && <OverlayTrigger show={true} placement={'top'} overlay={
+                <UpdatingPopover className="p-0">
+                    <img
+                        src={getSrcForFrame(sample.data, hoverPositionFrame)}
+                        alt={`Frame ${hoverPositionFrame}`}
+                        height={180}
+                    />
+                </UpdatingPopover>
+            }>
+                <div className="timeline-cursor" style={{
+                    width: `min(2px, ${100 / sample.numFrames}%)`,
+                    left: `${100 * hoverPositionFrame / sample.numFrames}%`,
+                }} />
+            </OverlayTrigger>}
+            {components.map(({ componentType, componentLength }, i) => (
+                <div key={i}
+                     className={`timeline-component timeline-component-${componentType}`}
+                     style={{ flexGrow: componentLength }} />
+            ))}
+        </div>
+    </>)
 }
