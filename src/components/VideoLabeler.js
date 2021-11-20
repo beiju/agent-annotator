@@ -218,8 +218,8 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         const { x, y } = eventToImageCoordinates(event)
         if (isDishMaskHovered(x, y)) {
             startDrag(x, y, DISH_MASK)
+            return
         }
-
 
         const hoveredAgent = getHoveredAgent(x, y)
         if (hoveredAgent) {
@@ -277,7 +277,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
             const { radius } = dishMaskLocation
             dispatch({
                 type: 'set_dish_mask_radius',
-                radius: Math.max(10, radius + event.deltaY / (event.shiftKey ? 100 : 10)),
+                radius: Math.max(10, radius + event.deltaY / (event.shiftKey ? 10 : 100)),
             })
         } else if (agentName) {
             if (agentName !== state.activeAgent) {
