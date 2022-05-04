@@ -1,0 +1,5 @@
+[default]
+data_path = "data"
+
+[debug]
+port = 8011

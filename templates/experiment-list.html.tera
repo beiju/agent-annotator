@@ -1,8 +1,12 @@
 {% extends "base" %}
 {% block title %}Experiments{% endblock title %}
-{% block content %}
-    <h1>Experiments</h1>
-    <p class="important">
-      Welcome to my awesome homepage.
-    </p>
-{% endblock content %}
+{% block body %}
+    <div class="container mt-5">
+        <div class="row">
+            <h1>Experiments</h1>
+            <form action="/list/refresh" method="post">
+                <input type="submit" value="Refresh experiments list" />
+            </form>
+        </div>
+    </div>
+{% endblock body %}
