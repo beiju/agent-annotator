@@ -8,7 +8,6 @@ use std::fmt::Debug;
 use rocket::State;
 use rocket::fairing::AdHoc;
 use rocket::fs::FileServer;
-use rocket::http::ContentType;
 use rocket::response;
 use rocket_dyn_templates::Template;
 use serde::Serialize;
@@ -24,6 +23,12 @@ pub enum WebError {
 
     #[error("IO error {0:?}")]
     Io (#[from] std::io::Error),
+
+    #[error("Video read error: {0:?}")]
+    VideoRead (#[from] ffmpeg_next::Error),
+
+    #[error("Non-unicode path")]
+    NonUnicodePath,
 }
 
 impl<'r, 'o: 'r> response::Responder<'r, 'o> for WebError {
@@ -63,8 +68,9 @@ async fn list(db: AnnotatorDbConn) -> WebResult<Template> {
 }
 
 #[post("/list/refresh")]
-async fn list_refresh(config: &State<AnnotatorConfig>) -> WebResult<response::Redirect> {
-    experiments::run_discovery(&config.data_path).await?;
+async fn list_refresh(db: AnnotatorDbConn, config: &State<AnnotatorConfig>) -> WebResult<response::Redirect> {
+    let data_path = config.data_path.clone();
+    db.run(move |c| experiments::run_discovery(c, &data_path)).await?;
     Ok(response::Redirect::to(uri!(list)))
 }
 
@@ -73,7 +79,7 @@ async fn list_refresh(config: &State<AnnotatorConfig>) -> WebResult<response::Re
 async fn main() {
     rocket::build()
         .mount("/", routes![index, list, list_refresh])
-        .mount("/public", FileServer::from("public/"))
+        .mount("/public", FileServer::from("public"))
         .attach(AdHoc::config::<AnnotatorConfig>())
         .attach(AnnotatorDbConn::fairing())
         .attach(Template::fairing())

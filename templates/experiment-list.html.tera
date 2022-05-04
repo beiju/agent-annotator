@@ -7,6 +7,16 @@
             <form action="/list/refresh" method="post">
                 <input type="submit" value="Refresh experiments list" />
             </form>
+
+            {% if experiments %}
+            <ul>
+                {% for experiment in experiments %}
+                    <li>{{experiment.folder_name}}: {{experiment.num_video_frames}} frames</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No experiments registered yet</p>
+            {% endif %}
         </div>
     </div>
 {% endblock body %}
