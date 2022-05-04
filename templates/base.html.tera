@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block head %}
+    <link rel="stylesheet" href="public/bootstrap-5.0.2-dist/style.css" />
+    <title>{% block title %}{% endblock title %} - Annotator</title>
+    {% endblock head %}
+</head>
+<body>
+    <div id="content">{% block content %}{% endblock content %}</div>
+</body>
+</html>
