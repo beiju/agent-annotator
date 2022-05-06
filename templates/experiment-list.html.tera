@@ -5,13 +5,22 @@
         <div class="row">
             <h1>Experiments</h1>
             <form action="/list/refresh" method="post">
-                <input type="submit" value="Refresh experiments list" />
+                <input class="btn" type="submit" value="Refresh experiments list" />
             </form>
 
             {% if experiments %}
             <ul>
                 {% for experiment in experiments %}
-                    <li>{{experiment.folder_name}}: {{experiment.num_video_frames}} frames</li>
+                    <li>
+                        {{experiment.folder_name}}: {{experiment.num_video_frames}} frames
+                        {% if experiment.claimed_by %}
+                         TODO
+                        {% else %}
+                            <form action="{{experiment.claim_uri}}" method="post">
+                                <input class="btn" type="submit" value="Start Annotating" />
+                            </form>
+                        {% endif %}
+                    </li>
                 {% endfor %}
             </ul>
             {% else %}

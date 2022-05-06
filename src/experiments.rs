@@ -1,4 +1,5 @@
 use std::path::Path;
+use chrono::{DateTime, Utc};
 
 use serde::Serialize;
 use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult};
@@ -12,6 +13,9 @@ pub struct Experiment {
     pub id: i32,
     pub folder_name: String,
     pub num_video_frames: i32,
+
+    pub claimed_by: Option<i32>,
+    pub claimed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Insertable, AsChangeset)]
@@ -87,4 +91,17 @@ pub fn run_discovery(conn: &PgConnection, data_path: &str) -> WebResult<()> {
     }
 
     Ok(())
+}
+
+pub fn claim(conn: &PgConnection, user_id: i32, experiment_id: i32) -> QueryResult<()> {
+    use crate::schema::experiments::dsl::*;
+
+
+    diesel::update(experiments.find(experiment_id))
+        .set((
+            claimed_by.eq(user_id),
+            claimed_at.eq(diesel::dsl::now),
+        ))
+        .execute(conn)
+        .map(|_| ())
 }

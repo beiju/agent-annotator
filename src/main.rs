@@ -7,14 +7,16 @@ extern crate rocket;
 extern crate diesel;
 
 use std::fmt::Debug;
+use std::path::Path;
 use rocket::State;
 use rocket::fairing::AdHoc;
 use rocket::form::Form;
-use rocket::fs::FileServer;
+use rocket::fs::{FileServer, NamedFile};
+use rocket::http::Status;
 use rocket::request::FlashMessage;
 use rocket::response;
 use rocket::response::{Flash, Redirect};
-use rocket_auth::{Auth, Login, Signup, Users};
+use rocket_auth::{Auth, Login, Signup, User, Users};
 use rocket_dyn_templates::Template;
 use serde::Serialize;
 use sqlx::PgPool;
@@ -131,16 +133,41 @@ async fn post_signup(auth: Auth<'_>, form: Form<Signup>) -> Result<MaybeFlashRed
     }
 }
 
+#[get("/logout")]
+fn logout(auth: Auth<'_>) -> Result<Redirect, rocket_auth::Error> {
+    auth.logout()?;
+    Ok(Redirect::to(uri!(index)))
+}
+
 async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
     #[derive(Serialize)]
-    struct ExperimentListContext {
-        experiments: Vec<experiments::Experiment>,
+    struct ExperimentContext<'a> {
+        folder_name: String,
+        num_video_frames: i32,
+        claimed_by: Option<String>,
+        claim_uri: rocket::http::uri::Origin<'a>
+    }
+
+    impl From<experiments::Experiment> for ExperimentContext<'_> {
+        fn from(e: experiments::Experiment) -> Self {
+            Self {
+                folder_name: e.folder_name,
+                num_video_frames: e.num_video_frames,
+                claimed_by: e.claimed_by.map(|c| format!("{}", c)), // TODO
+                claim_uri: uri!(claim(e.id)),
+            }
+        }
+    }
+
+    #[derive(Serialize)]
+    struct ExperimentListContext<'a> {
+        experiments: Vec<ExperimentContext<'a>>,
     }
 
     let experiments = db.run(|c| experiments::get_all_experiments(c)).await?;
 
     Ok(Template::render("experiment-list", ExperimentListContext {
-        experiments
+        experiments: experiments.into_iter().map(|e| e.into()).collect()
     }))
 }
 
@@ -151,12 +178,28 @@ async fn list_refresh(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, _aut
     Ok(Redirect::to(uri!(index)))
 }
 
+#[post("/claim?<experiment_id>")]
+async fn claim(db: AnnotatorDbConn, user: User, experiment_id: i32) -> Result<Redirect, Status> {
+    db.run(move |c| {
+        experiments::claim(c, user.id(), experiment_id)
+    }).await
+        .map_err(|_| Status::InternalServerError)?;
+
+    Ok(Redirect::to(uri!(annotate(experiment_id))))
+}
+
+#[get("/annotate?<_experiment_id>")]
+async fn annotate(_user: User, _experiment_id: i32) -> std::io::Result<NamedFile> {
+    NamedFile::open(Path::new("public/annotator/index.html")).await
+}
+
 #[rocket::main]
 #[allow(unused_must_use)]
 async fn main() -> Result<(), rocket_auth::Error> {
     rocket::build()
-        .mount("/", routes![index, post_login, signup, post_signup, list_refresh])
+        .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, annotate])
         .mount("/public", FileServer::from("public"))
+        .mount("/annotator", FileServer::from("public/annotator"))
         .attach(AdHoc::config::<AnnotatorConfig>())
         .attach(AnnotatorDbConn::fairing())
         .attach(Template::fairing())
