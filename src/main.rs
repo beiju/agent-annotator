@@ -53,7 +53,6 @@ impl UserFacingError for rocket_auth::Error {
             | Self::FormValidationErrors(_) => true,
             _ => false
         }
-
     }
 }
 
@@ -105,7 +104,6 @@ async fn post_login(auth: Auth<'_>, form: Form<Login>) -> Result<MaybeFlashRedir
         Err(err) if err.is_user_facing() => {
             Ok(MaybeFlashRedirect::Flash(Flash::error(Redirect::to(uri!(index)),
                                                       err.to_string())))
-
         }
         Err(err) => { Err(err) }
     }
@@ -156,28 +154,28 @@ async fn list_refresh(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, _aut
 #[rocket::main]
 #[allow(unused_must_use)]
 async fn main() -> Result<(), rocket_auth::Error> {
-    let conn = PgPool::connect("[im not committing my secrets]").await?;
-    let mut users: Users = conn.clone().into();
-    users.create_table().await?;
-    users.open_redis("redis://127.0.0.1/")?;
     rocket::build()
         .mount("/", routes![index, post_login, signup, post_signup, list_refresh])
         .mount("/public", FileServer::from("public"))
-        .manage(users)
         .attach(AdHoc::config::<AnnotatorConfig>())
         .attach(AnnotatorDbConn::fairing())
         .attach(Template::fairing())
-        // .attach(AdHoc::on_ignite("rocket_auth init", |rocket| {
-        //     Box::pin(async move {
-        //         let postgres_connection_path: String = rocket.figment()
-        //             .extract_inner("databases.annotator.url")
-        //             .expect("Expected database URL in rocket config");
-        //
-        //         let users = Users::open_postgres(&postgres_connection_path).await;
-        //         dbg!("got users");
-        //         rocket.manage(users)
-        //     })
-        // }))
+        .attach(AdHoc::on_ignite("rocket_auth init", |rocket| {
+            Box::pin(async move {
+                let postgres_connection_path: String = rocket.figment()
+                    .extract_inner("databases.annotator.url")
+                    .expect("Expected database URL in rocket config");
+
+                let conn = PgPool::connect(&postgres_connection_path).await
+                    .expect("Failed to connect to postgres");
+                let mut users: Users = conn.clone().into();
+                users.create_table().await
+                    .expect("Failed to create or verify users table");
+                users.open_redis("redis://127.0.0.1/")
+                    .expect("Failed to connect to redis");
+                rocket.manage(users)
+            })
+        }))
         .launch().await;
 
     Ok(())

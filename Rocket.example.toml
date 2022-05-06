@@ -2,5 +2,8 @@
 data_path = "data"
 secret_key = # insert a secret key
 
+[default.databases]
+annotator = { url = "path to postgres database" }
+
 [debug]
 port = 8011
