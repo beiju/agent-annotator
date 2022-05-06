@@ -14,7 +14,7 @@ use rocket::fs::FileServer;
 use rocket::request::FlashMessage;
 use rocket::response;
 use rocket::response::{Flash, Redirect};
-use rocket_auth::{Auth, Login, Users};
+use rocket_auth::{Auth, Login, Signup, Users};
 use rocket_dyn_templates::Template;
 use serde::Serialize;
 use sqlx::PgPool;
@@ -38,6 +38,25 @@ pub enum WebError {
     NonUnicodePath,
 }
 
+trait UserFacingError {
+    fn is_user_facing(&self) -> bool;
+}
+
+impl UserFacingError for rocket_auth::Error {
+    fn is_user_facing(&self) -> bool {
+        match self {
+            Self::InvalidEmailAddressError
+            | Self::EmailAlreadyExists
+            | Self::UnauthorizedError
+            | Self::UserNotFoundError
+            | Self::FormValidationError(_)
+            | Self::FormValidationErrors(_) => true,
+            _ => false
+        }
+
+    }
+}
+
 impl<'r, 'o: 'r> response::Responder<'r, 'o> for WebError {
     fn respond_to(self, _: &'r rocket::Request<'_>) -> response::Result<'o> {
         error!("Web error: {:?}", self);
@@ -59,34 +78,60 @@ fn index(flash: Option<FlashMessage<'_>>) -> Template {
     #[derive(Serialize)]
     struct ExperimentListContext<'a> {
         logged_in: bool,
-        error: Option<&'a str>
+        error: Option<&'a str>,
     }
 
     Template::render("index", ExperimentListContext {
         logged_in: false,
-        error: flash.as_ref().map(|f| f.message())
+        error: flash.as_ref().map(|f| f.message()),
     })
 }
 
 #[derive(Responder)]
-enum LoginResult {
-    Success(Redirect),
-    Failure(Flash<Redirect>)
+enum MaybeFlashRedirect {
+    NoFlash(Redirect),
+    Flash(Flash<Redirect>),
 }
 
 #[post("/login", data = "<form>")]
-async fn post_login(auth: Auth<'_>, form: Form<Login>) -> Result<LoginResult, rocket_auth::Error> {
-    let result = auth.login(&form).await;
-    println!("login attempt: {:?}", result);
-    match result {
+async fn post_login(auth: Auth<'_>, form: Form<Login>) -> Result<MaybeFlashRedirect, rocket_auth::Error> {
+    match auth.login(&form).await {
         Ok(()) => {
-            Ok(LoginResult::Success(Redirect::to(uri!(index))))
+            Ok(MaybeFlashRedirect::NoFlash(Redirect::to(uri!(index))))
         }
-        Err(rocket_auth::Error::EmailDoesNotExist(_)) | Err(rocket_auth::Error::UnauthorizedError) => {
-            Ok(LoginResult::Failure(Flash::error(Redirect::to(uri!(index)),
-                                                 "Invalid username or password")))
+        Err(err) if err.is_user_facing() => {
+            Ok(MaybeFlashRedirect::Flash(Flash::error(Redirect::to(uri!(index)),
+                                                      err.to_string())))
+
         }
-        Err(other) => { Err(other) }
+        Err(err) => { Err(err) }
+    }
+}
+
+#[get("/signup")]
+fn signup(flash: Option<FlashMessage<'_>>) -> Template {
+    #[derive(Serialize)]
+    struct FlashContext<'a> {
+        error: Option<&'a str>,
+    }
+
+    Template::render("signup", FlashContext {
+        error: flash.as_ref().map(|f| f.message()),
+    })
+}
+
+#[post("/signup", data = "<form>")]
+async fn post_signup(auth: Auth<'_>, form: Form<Signup>) -> Result<MaybeFlashRedirect, rocket_auth::Error> {
+    match auth.signup(&form).await {
+        Ok(()) => {
+            auth.login(&form.into()).await?;
+            Ok(MaybeFlashRedirect::NoFlash(Redirect::to(uri!(index))))
+        }
+        Err(err) if err.is_user_facing() => {
+            Ok(MaybeFlashRedirect::Flash(Flash::error(Redirect::to(uri!(signup)),
+                                                      err.to_string())))
+        }
+        Err(err) => { Err(err) }
     }
 }
 
@@ -118,7 +163,7 @@ async fn main() -> Result<(), rocket_auth::Error> {
     let users: Users = conn.clone().into();
     users.create_table().await?;
     rocket::build()
-        .mount("/", routes![index, post_login, list, list_refresh])
+        .mount("/", routes![index, post_login, signup, post_signup, list, list_refresh])
         .mount("/public", FileServer::from("public"))
         .manage(users)
         .attach(AdHoc::config::<AnnotatorConfig>())
