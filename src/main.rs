@@ -73,18 +73,21 @@ struct AnnotatorConfig {
     data_path: String,
 }
 
-#[get("/")]
-fn index(flash: Option<FlashMessage<'_>>) -> Template {
-    #[derive(Serialize)]
-    struct ExperimentListContext<'a> {
-        logged_in: bool,
-        error: Option<&'a str>,
-    }
+#[derive(Serialize)]
+struct FlashContext<'a> {
+    error: Option<&'a str>,
+}
 
-    Template::render("index", ExperimentListContext {
-        logged_in: false,
-        error: flash.as_ref().map(|f| f.message()),
-    })
+
+#[get("/")]
+async fn index(db: AnnotatorDbConn, flash: Option<FlashMessage<'_>>, auth: Auth<'_>) -> WebResult<Template> {
+    if auth.is_auth() {
+        list(db, auth).await
+    } else {
+        Ok(Template::render("index", FlashContext {
+            error: flash.as_ref().map(|f| f.message()),
+        }))
+    }
 }
 
 #[derive(Responder)]
@@ -110,11 +113,6 @@ async fn post_login(auth: Auth<'_>, form: Form<Login>) -> Result<MaybeFlashRedir
 
 #[get("/signup")]
 fn signup(flash: Option<FlashMessage<'_>>) -> Template {
-    #[derive(Serialize)]
-    struct FlashContext<'a> {
-        error: Option<&'a str>,
-    }
-
     Template::render("signup", FlashContext {
         error: flash.as_ref().map(|f| f.message()),
     })
@@ -135,7 +133,6 @@ async fn post_signup(auth: Auth<'_>, form: Form<Signup>) -> Result<MaybeFlashRed
     }
 }
 
-#[get("/list")]
 async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
     #[derive(Serialize)]
     struct ExperimentListContext {
@@ -153,17 +150,18 @@ async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
 async fn list_refresh(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, _auth: Auth<'_>) -> WebResult<Redirect> {
     let data_path = config.data_path.clone();
     db.run(move |c| experiments::run_discovery(c, &data_path)).await?;
-    Ok(Redirect::to(uri!(list)))
+    Ok(Redirect::to(uri!(index)))
 }
 
 #[rocket::main]
 #[allow(unused_must_use)]
 async fn main() -> Result<(), rocket_auth::Error> {
     let conn = PgPool::connect("[im not committing my secrets]").await?;
-    let users: Users = conn.clone().into();
+    let mut users: Users = conn.clone().into();
     users.create_table().await?;
+    users.open_redis("redis://127.0.0.1/")?;
     rocket::build()
-        .mount("/", routes![index, post_login, signup, post_signup, list, list_refresh])
+        .mount("/", routes![index, post_login, signup, post_signup, list_refresh])
         .mount("/public", FileServer::from("public"))
         .manage(users)
         .attach(AdHoc::config::<AnnotatorConfig>())
