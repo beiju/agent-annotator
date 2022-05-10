@@ -6,13 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rocket="0.5.0-rc.1"
+rocket = { version = "0.5.0-rc.1", features=["json"] }
 rocket_dyn_templates = { version = "0.1.0-rc.1", features=["tera"] }
 rocket_sync_db_pools = { version = "0.1.0-rc.1", default-features=false, features= ["diesel_postgres_pool"] }
 rocket_auth = { version = "0.4.0", features = ["sqlx-postgres", "redis"] }
+rocket_cors = "0.6.0-alpha1"
 sqlx = { version = "0.5.13", features = ["runtime-tokio-rustls"] }
 serde = "1.0.137"
+serde_json = "1.0.81"
 thiserror = "1.0.31"
-diesel = { version = "1.4.4", features = ["postgres", "chrono"] }
+diesel = { version = "1.4.4", features = ["postgres", "chrono", "serde_json"] }
 ffmpeg-next = "5.0.3"
+opencv = { version = "0.63.1", features = ["clang-runtime"] }
 chrono = { version = "0.4.19", features = ["serde"] }

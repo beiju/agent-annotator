@@ -1,5 +1,6 @@
 mod experiments;
 mod schema;
+mod api;
 
 #[macro_use]
 extern crate rocket;
@@ -8,22 +9,27 @@ extern crate diesel;
 
 use std::fmt::Debug;
 use std::path::Path;
-use rocket::{Either, State};
-use rocket::fairing::AdHoc;
-use rocket::form::Form;
-use rocket::fs::{FileServer, NamedFile};
-use rocket::http::Status;
-use rocket::request::FlashMessage;
-use rocket::response;
-use rocket::response::{Flash, Redirect};
+use rocket::{
+    request::FlashMessage,
+    http::Status,
+    fs::{FileServer, NamedFile},
+    form::Form,
+    fairing::AdHoc,
+    Either,
+    State,
+    response,
+    response::{Flash, Redirect}
+};
+use rocket::http::Method;
 use rocket_auth::{Auth, Login, Signup, User, Users};
+use rocket_cors::{AllowedHeaders, AllowedOrigins};
 use rocket_dyn_templates::Template;
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
 
 #[rocket_sync_db_pools::database("annotator")]
-struct AnnotatorDbConn(diesel::PgConnection);
+pub struct AnnotatorDbConn(diesel::PgConnection);
 
 #[derive(Error, Debug)]
 pub enum WebError {
@@ -33,8 +39,8 @@ pub enum WebError {
     #[error("IO error {0:?}")]
     Io(#[from] std::io::Error),
 
-    #[error("Video read error: {0:?}")]
-    VideoRead(#[from] ffmpeg_next::Error),
+    #[error(transparent)]
+    OpenCV(#[from] opencv::Error),
 
     #[error("Non-unicode path")]
     NonUnicodePath,
@@ -61,16 +67,16 @@ impl UserFacingError for rocket_auth::Error {
 impl<'r, 'o: 'r> response::Responder<'r, 'o> for WebError {
     fn respond_to(self, _: &'r rocket::Request<'_>) -> response::Result<'o> {
         error!("Web error: {:?}", self);
-        Err(rocket::http::Status::InternalServerError)
+        Err(Status::InternalServerError)
     }
 }
 
 
-type WebResult<T> = Result<T, WebError>;
+pub type WebResult<T> = Result<T, WebError>;
 
 
 #[derive(serde::Deserialize)]
-struct AnnotatorConfig {
+pub struct AnnotatorConfig {
     data_path: String,
 }
 
@@ -147,6 +153,7 @@ async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
         claimed_by: Option<String>,
         claim_uri: rocket::http::uri::Origin<'a>,
         release_uri: rocket::http::uri::Origin<'a>,
+        labeler_uri: String,
     }
 
     impl From<experiments::Experiment> for ExperimentContext<'_> {
@@ -157,6 +164,7 @@ async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
                 claimed_by: e.claimed_by.map(|c| format!("{}", c)), // TODO
                 claim_uri: uri!(claim(e.id)),
                 release_uri: uri!(release(e.id)),
+                labeler_uri: labeler_url(e.id),
             }
         }
     }
@@ -203,7 +211,7 @@ async fn release(db: AnnotatorDbConn, user: User, experiment_id: i32) -> Result<
 #[get("/annotate?<experiment_id>")]
 async fn annotate(_user: User, experiment_id: i32) -> std::io::Result<Either<Redirect, NamedFile>> {
     if rocket::config::Config::DEFAULT_PROFILE == "debug" {
-        let r = Redirect::to(format!("//localhost:3000/annotator?experiment_id={}", experiment_id));
+        let r = Redirect::to(labeler_url(experiment_id));
         Ok(Either::Left(r))
     } else {
         let f = NamedFile::open(Path::new("public/annotator/index.html")).await?;
@@ -211,16 +219,32 @@ async fn annotate(_user: User, experiment_id: i32) -> std::io::Result<Either<Red
     }
 }
 
+fn labeler_url(experiment_id: i32) -> String {
+    format!("//127.0.0.1:3000/annotator?experiment_id={}", experiment_id)
+}
+
+
 #[rocket::main]
 #[allow(unused_must_use)]
-async fn main() -> Result<(), rocket_auth::Error> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cors = rocket_cors::CorsOptions {
+        allowed_origins: AllowedOrigins::some_exact(&["http://127.0.0.1:3000"]),
+        allowed_methods: vec![Method::Get, Method::Post].into_iter().map(From::from).collect(),
+        allowed_headers: AllowedHeaders::some(&["Authorization", "Accept", "Content-Type"]),
+        allow_credentials: true,
+        ..Default::default()
+    }
+        .to_cors()?;
+
     rocket::build()
         .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate])
         .mount("/public", FileServer::from("public"))
         .mount("/annotator", FileServer::from("public/annotator"))
+        .mount("/api", api::routes())
         .attach(AdHoc::config::<AnnotatorConfig>())
         .attach(AnnotatorDbConn::fairing())
         .attach(Template::fairing())
+        .attach(cors)
         .attach(AdHoc::on_ignite("rocket_auth init", |rocket| {
             Box::pin(async move {
                 let postgres_connection_path: String = rocket.figment()

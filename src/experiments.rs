@@ -16,6 +16,8 @@ pub struct Experiment {
 
     pub claimed_by: Option<i32>,
     pub claimed_at: Option<DateTime<Utc>>,
+
+    pub label: Option<serde_json::Value>,
 }
 
 #[derive(Insertable, AsChangeset)]
@@ -29,6 +31,13 @@ pub fn get_all_experiments(conn: &PgConnection) -> QueryResult<Vec<Experiment>> 
     use crate::schema::experiments::dsl::*;
 
     experiments.get_results(conn)
+}
+
+pub fn get_experiment(conn: &PgConnection, experiment_id: i32) -> QueryResult<Experiment> {
+    use crate::schema::experiments::dsl::*;
+
+    experiments.find(experiment_id)
+        .get_result::<Experiment>(conn)
 }
 
 pub fn run_discovery(conn: &PgConnection, data_path: &str) -> WebResult<()> {
@@ -49,34 +58,13 @@ pub fn run_discovery(conn: &PgConnection, data_path: &str) -> WebResult<()> {
         let video_path = file.path().join("camera.avi-0000.avi");
         let video_path_str = video_path.to_str()
             .ok_or(WebError::NonUnicodePath)?;
-        let mut input = ffmpeg_next::format::input(&video_path_str)?;
-        let video_stream = input
-            .streams()
-            .best(ffmpeg_next::media::Type::Video)
-            .ok_or(ffmpeg_next::Error::StreamNotFound)?;
-        let video_stream_index = video_stream.index();
+        // let video = video::VideoWithStream::new(video_path_str);
 
-        let context_decoder = ffmpeg_next::codec::context::Context::from_parameters(video_stream.parameters())?;
-        let mut decoder = context_decoder.decoder().video()?;
         let mut num_frames = 0;
-
-        let mut receive_and_process_decoded_frames =
-            |decoder: &mut ffmpeg_next::decoder::Video| -> Result<(), ffmpeg_next::Error> {
-                let mut decoded = ffmpeg_next::util::frame::Video::empty();
-                while decoder.receive_frame(&mut decoded).is_ok() {
-                    num_frames += 1;
-                }
-                Ok(())
-            };
-
-        for (stream, packet) in input.packets() {
-            if stream.index() == video_stream_index {
-                decoder.send_packet(&packet)?;
-                receive_and_process_decoded_frames(&mut decoder)?;
-            }
-        }
-        decoder.send_eof()?;
-        receive_and_process_decoded_frames(&mut decoder)?;
+        // for frame in video.frames() {
+        //     frame?;
+        //     num_frames += 1;
+        // }
 
         let new_experiment = NewExperiment {
             folder_name: &folder_name_str,
@@ -123,6 +111,17 @@ pub fn release(conn: &PgConnection, user_id: i32, experiment_id: i32) -> QueryRe
             claimed_by: None,
             claimed_at: None,
         })
+        .execute(conn)
+        .map(|_| ())
+}
+
+pub fn set_label(conn: &PgConnection, user_id: i32, experiment_id: i32, label: serde_json::Value) -> QueryResult<()> {
+    use crate::schema::experiments::dsl;
+
+    // TODO Some sort of error when the user tries to update something they don't own
+    diesel::update(dsl::experiments.find(experiment_id))
+        .filter(dsl::claimed_by.eq(user_id))
+        .set(dsl::label.eq(label))
         .execute(conn)
         .map(|_| ())
 }

@@ -5,6 +5,7 @@ table! {
         num_video_frames -> Int4,
         claimed_by -> Nullable<Int4>,
         claimed_at -> Nullable<Timestamptz>,
+        label -> Nullable<Jsonb>,
     }
 }
 

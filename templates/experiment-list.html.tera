@@ -14,8 +14,9 @@
                     <li>
                         {{experiment.folder_name}}: {{experiment.num_video_frames}} frames
                         {% if experiment.claimed_by %}
+                            <a href="{{experiment.labeler_uri}}" class="btn btn-outline-primary">Resume Annotating</a>
                             <form action="{{experiment.release_uri}}" method="post">
-                                <input class="btn btn-outline-primary" type="submit" value="Un-assign Me" />
+                                <input class="btn btn-outline-danger" type="submit" value="Un-assign Me" />
                             </form>
                         {% else %}
                             <form action="{{experiment.claim_uri}}" method="post">
