@@ -104,7 +104,7 @@ export function Timeline({ sample, state }) {
             {hoverPositionFrame !== null && <OverlayTrigger show={true} placement={'top'} overlay={
                 <UpdatingPopover className="p-0">
                     <img
-                        src={getSrcForFrame(sample.data, hoverPositionFrame)}
+                        src={getSrcForFrame(sample.id, hoverPositionFrame)}
                         alt={`Frame ${hoverPositionFrame}`}
                         height={180}
                     />

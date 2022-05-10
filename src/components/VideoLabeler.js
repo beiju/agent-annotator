@@ -28,7 +28,7 @@ function transform(x, y, angle, flipped) {
 
 const DISH_MASK = Symbol('DISH_MASK')
 
-export function VideoLabeler({ sample, state, nextVideo }) {
+export function VideoLabeler({ sample, state, returnToIndex }) {
     const dispatch = useContext(LabelsDispatch)
 
     /** @type {React.MutableRefObject<HTMLCanvasElement>} */
@@ -43,11 +43,11 @@ export function VideoLabeler({ sample, state, nextVideo }) {
         }
 
         element.addEventListener('load', imageLoaded)
-        element.src = getSrcForFrame(sample.data, state.activeFrame)
+        element.src = getSrcForFrame(sample.id, state.activeFrame)
 
         // The element will be garbage collected as long as this event listener isn't around creating a cycle
         return () => element.removeEventListener('load', imageLoaded)
-    }, [dispatch, sample.data, state.activeFrame])
+    }, [dispatch, sample.id, state.activeFrame])
 
     const dishMaskLocation = useMemo(() => {
         if (!image) return null
@@ -159,10 +159,10 @@ export function VideoLabeler({ sample, state, nextVideo }) {
 
     // Preload next 3 frames
     useEffect(() => {
-        new Image().src = getSrcForFrame(sample.data, state.activeFrame + 1)
-        new Image().src = getSrcForFrame(sample.data, state.activeFrame + 2)
-        new Image().src = getSrcForFrame(sample.data, state.activeFrame + 3)
-    }, [sample.data, state.activeFrame])
+        new Image().src = getSrcForFrame(sample.id, state.activeFrame + 1)
+        new Image().src = getSrcForFrame(sample.id, state.activeFrame + 2)
+        new Image().src = getSrcForFrame(sample.id, state.activeFrame + 3)
+    }, [sample.id, state.activeFrame])
 
     function eventToImageCoordinates(event) {
         if (!canvas) throw new Error("Canvas ref was cleared")
@@ -296,7 +296,7 @@ export function VideoLabeler({ sample, state, nextVideo }) {
     }
 
     return (<Col className="h-100 d-flex flex-column">
-        <Toolbar sample={sample} state={state} nextVideo={nextVideo} />
+        <Toolbar sample={sample} state={state} returnToIndex={returnToIndex} />
         <div className="labeler-canvas-container">
             <canvas
                 className="labeler-canvas"

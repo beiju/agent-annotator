@@ -1,5 +1,4 @@
-import Labelbox from '@labelbox/labeling-api'
-import { useEffect, useReducer, useState } from "react"
+import { useEffect, useMemo, useReducer, useState } from "react"
 import { Container, Row } from "react-bootstrap"
 import { Sidebar } from "./Sidebar"
 import { VideoLabeler } from "./VideoLabeler"
@@ -20,26 +19,40 @@ export default function Labeler() {
     const [state, dispatch] = useReducer(reducer, defaultState, i => i)
 
     const [sample, setSample] = useState(null)
-    useEffect(() => {
-        const subscription = Labelbox.currentAsset().subscribe(async sample => {
-            if (sample) {
-                const url = sample.data.replace(".mp4", "/num_frames.txt")
 
-                const response = await fetch(url)
-                const text = await response.text()
-                sample.numFrames = parseInt(text, 10)
-
-                const parsedState = sample.label ? JSON.parse(sample.label) : defaultState
-                parsedState.data = sample.data
-                console.log("Restoring ", parsedState)
-                dispatch({ type: 'set_state', state: parsedState })
-            }
-
-            setSample(sample)
-        })
-
-        return () => subscription.unsubscribe()
+    const experimentId = useMemo(() => {
+        return new URL(window.location).searchParams.get("experiment_id")
     }, [])
+
+    useEffect(() => {
+        const controller = new AbortController()
+        const signal = controller.signal
+        fetch(`//127.0.0.1:8011/api/experiment?id=${experimentId}`, { signal })
+          .then(response => response.json())
+          .then(sample => {
+              if (signal.aborted) {
+                  console.log("State restoration aborted after fetch finished")
+                  return
+              }
+              setSample(sample)
+
+              if (sample.label) {
+                  console.log("Restoring ", sample.label)
+                  dispatch({ type: 'set_state', state: sample.label })
+              } else {
+                  console.log("New sample")
+                  dispatch({ type: 'set_state', state: defaultState })
+              }
+          })
+          .catch(err => {
+              // AbortError is for intentional aborts using AbortController, so no handling is needed
+              if (err.name === 'AbortError') return
+
+              alert(`Failed to fetch experiment: ${err}`)
+          })
+
+        return () => controller.abort()
+    }, [experimentId])
 
     useEffect(() => {
         function listener(event) {
@@ -102,16 +115,23 @@ export default function Labeler() {
     const hasSample = !!sample
     useEffect(() => {
         if (!hasSample) return
-        Labelbox.setLabelForAsset(JSON.stringify(state)).catch(err => {
-            console.error(err)
+        fetch(`//127.0.0.1:8011/api/set_label?id=${experimentId}`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                'Content-Type': 'application/json'
+                // 'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: JSON.stringify(state)
         })
+          .catch(err => {
+              alert(`Failed to save changes: ${err}`)
+          })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hasSample, state.activeFrame])
+    }, [hasSample, state.activeFrame, experimentId])
 
-    function nextVideo() {
-        Labelbox.fetchNextAssetToLabel().catch(err => {
-            console.error(err)
-        })
+    function returnToIndex() {
+        window.location = "//127.0.0.1:8011/"
     }
 
     if (!sample) return (<p>Loading&hellip;</p>)
@@ -120,7 +140,7 @@ export default function Labeler() {
         <Row className="h-100">
             <LabelsDispatch.Provider value={dispatch}>
                 <Sidebar state={state} />
-                <VideoLabeler sample={sample} state={state} nextVideo={nextVideo} />
+                <VideoLabeler sample={sample} state={state} returnToIndex={returnToIndex} />
             </LabelsDispatch.Provider>
         </Row>
     </Container>)

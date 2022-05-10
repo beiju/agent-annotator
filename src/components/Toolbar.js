@@ -6,7 +6,7 @@ import { BiHelpCircle } from "react-icons/bi"
 import { CgCloseR } from "react-icons/cg"
 import { ImLock, ImUnlocked } from "react-icons/im"
 
-export function Toolbar({ sample, state, nextVideo }) {
+export function Toolbar({ sample, state, returnToIndex }) {
     const dispatch = useContext(LabelsDispatch)
 
     const [helpVisible, setHelpVisible] = useState(false)
@@ -61,7 +61,7 @@ export function Toolbar({ sample, state, nextVideo }) {
                     onClick={() => setHelpVisible(!helpVisible)}
                 ><BiHelpCircle /></Button>
 
-                <Button onClick={nextVideo}>Next video</Button>
+                <Button onClick={returnToIndex}>Stop labeling</Button>
             </Nav>
         </Navbar>
 
