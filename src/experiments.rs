@@ -93,15 +93,36 @@ pub fn run_discovery(conn: &PgConnection, data_path: &str) -> WebResult<()> {
     Ok(())
 }
 
+#[derive(AsChangeset)]
+#[table_name = "experiments"]
+#[changeset_options(treat_none_as_null = "true")]
+struct UpdateClaim {
+    claimed_by: Option<i32>,
+    claimed_at: Option<DateTime<Utc>>,
+}
+
 pub fn claim(conn: &PgConnection, user_id: i32, experiment_id: i32) -> QueryResult<()> {
     use crate::schema::experiments::dsl::*;
-
 
     diesel::update(experiments.find(experiment_id))
         .set((
             claimed_by.eq(user_id),
             claimed_at.eq(diesel::dsl::now),
         ))
+        .execute(conn)
+        .map(|_| ())
+}
+
+pub fn release(conn: &PgConnection, user_id: i32, experiment_id: i32) -> QueryResult<()> {
+    use crate::schema::experiments::dsl::*;
+
+    // TODO Some sort of error when the user tries to release something they don't own
+    diesel::update(experiments.find(experiment_id))
+        .filter(claimed_by.eq(user_id))
+        .set(&UpdateClaim {
+            claimed_by: None,
+            claimed_at: None,
+        })
         .execute(conn)
         .map(|_| ())
 }

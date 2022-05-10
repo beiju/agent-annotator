@@ -8,7 +8,7 @@ extern crate diesel;
 
 use std::fmt::Debug;
 use std::path::Path;
-use rocket::State;
+use rocket::{Either, State};
 use rocket::fairing::AdHoc;
 use rocket::form::Form;
 use rocket::fs::{FileServer, NamedFile};
@@ -145,7 +145,8 @@ async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
         folder_name: String,
         num_video_frames: i32,
         claimed_by: Option<String>,
-        claim_uri: rocket::http::uri::Origin<'a>
+        claim_uri: rocket::http::uri::Origin<'a>,
+        release_uri: rocket::http::uri::Origin<'a>,
     }
 
     impl From<experiments::Experiment> for ExperimentContext<'_> {
@@ -155,6 +156,7 @@ async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
                 num_video_frames: e.num_video_frames,
                 claimed_by: e.claimed_by.map(|c| format!("{}", c)), // TODO
                 claim_uri: uri!(claim(e.id)),
+                release_uri: uri!(release(e.id)),
             }
         }
     }
@@ -188,16 +190,32 @@ async fn claim(db: AnnotatorDbConn, user: User, experiment_id: i32) -> Result<Re
     Ok(Redirect::to(uri!(annotate(experiment_id))))
 }
 
-#[get("/annotate?<_experiment_id>")]
-async fn annotate(_user: User, _experiment_id: i32) -> std::io::Result<NamedFile> {
-    NamedFile::open(Path::new("public/annotator/index.html")).await
+#[post("/release?<experiment_id>")]
+async fn release(db: AnnotatorDbConn, user: User, experiment_id: i32) -> Result<Redirect, Status> {
+    db.run(move |c| {
+        experiments::release(c, user.id(), experiment_id)
+    }).await
+        .map_err(|_| Status::InternalServerError)?;
+
+    Ok(Redirect::to(uri!(index)))
+}
+
+#[get("/annotate?<experiment_id>")]
+async fn annotate(_user: User, experiment_id: i32) -> std::io::Result<Either<Redirect, NamedFile>> {
+    if rocket::config::Config::DEFAULT_PROFILE == "debug" {
+        let r = Redirect::to(format!("//localhost:3000/annotator?experiment_id={}", experiment_id));
+        Ok(Either::Left(r))
+    } else {
+        let f = NamedFile::open(Path::new("public/annotator/index.html")).await?;
+        Ok(Either::Right(f))
+    }
 }
 
 #[rocket::main]
 #[allow(unused_must_use)]
 async fn main() -> Result<(), rocket_auth::Error> {
     rocket::build()
-        .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, annotate])
+        .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate])
         .mount("/public", FileServer::from("public"))
         .mount("/annotator", FileServer::from("public/annotator"))
         .attach(AdHoc::config::<AnnotatorConfig>())
