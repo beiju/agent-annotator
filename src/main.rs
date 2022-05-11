@@ -1,6 +1,7 @@
 mod experiments;
 mod schema;
 mod api;
+mod projects;
 
 #[macro_use]
 extern crate rocket;
@@ -92,15 +93,32 @@ struct FlashContext<'a> {
 }
 
 #[get("/")]
-async fn index(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, flash: Option<FlashMessage<'_>>, auth: Auth<'_>) -> WebResult<Template> {
-    if auth.is_auth() {
-        list(db, config, auth).await
+async fn index(db: AnnotatorDbConn, flash: Option<FlashMessage<'_>>, auth: Auth<'_>) -> WebResult<Template> {
+    if let Some(user) = auth.get_user().await {
+        user_projects_list(db, &user).await
     } else {
-        Ok(Template::render("index", FlashContext {
+        Ok(Template::render("login", FlashContext {
             error: flash.as_ref().map(|f| f.message()),
         }))
     }
 }
+
+async fn user_projects_list(db: AnnotatorDbConn, user: &User) -> WebResult<Template> {
+    let user_id = user.id();
+    let (own_projects, other_projects) = db.run(move |c| projects::get_user_projects(c, user_id)).await?;
+
+    #[derive(Serialize)]
+    struct ProjectListContext {
+        own_projects: Vec<projects::Project>,
+        other_projects: Vec<projects::Project>,
+        is_admin: bool,
+    }
+
+    Ok(Template::render("projects-list", ProjectListContext {
+        own_projects,
+        other_projects,
+        is_admin: user.is_admin,
+    }))}
 
 #[derive(Responder)]
 enum MaybeFlashRedirect {
@@ -240,8 +258,6 @@ embed_migrations!();
 #[rocket::main]
 #[allow(unused_must_use)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
-
     rocket::build()
         .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate])
         .mount("/public", FileServer::from("public"))

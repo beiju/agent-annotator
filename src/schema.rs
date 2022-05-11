@@ -10,6 +10,23 @@ table! {
 }
 
 table! {
+    project_members (id) {
+        id -> Int4,
+        user_id -> Int4,
+        project_id -> Int4,
+    }
+}
+
+table! {
+    projects (id) {
+        id -> Int4,
+        name -> Text,
+        experiments_dir -> Text,
+        owner -> Nullable<Int4>,
+    }
+}
+
+table! {
     users (id) {
         id -> Int4,
         email -> Varchar,
@@ -19,8 +36,13 @@ table! {
 }
 
 joinable!(experiments -> users (claimed_by));
+joinable!(project_members -> projects (project_id));
+joinable!(project_members -> users (user_id));
+joinable!(projects -> users (owner));
 
 allow_tables_to_appear_in_same_query!(
     experiments,
+    project_members,
+    projects,
     users,
 );

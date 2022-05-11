@@ -1,0 +1,37 @@
+{% extends "base" %}
+{% block title %}Projects{% endblock title %}
+{% block body %}
+    <div class="container mt-5">
+        <div class="row">
+            {% if own_projects %}
+                <h1>My Projects</h1>
+                <ul>
+                    {% for project in own_projects %}
+                        <li>
+                            {{project.name}}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <h1>Projects</h1>
+            {% if other_projects %}
+                <ul>
+                    {% for project in other_projects %}
+                        <li>
+                            {{project.name}}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if not own_projects and not other_projects %}
+                <p>You are not a part of any projects! Ask a project owner to be added to their project.</p>
+            {% endif %}
+
+            {% if is_admin %}
+                <a href="/new-project" class="btn btn-outline-primary">New Project</a>
+            {% endif %}
+        </div>
+    </div>
+{% endblock body %}
