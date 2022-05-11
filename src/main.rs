@@ -6,6 +6,8 @@ mod api;
 extern crate rocket;
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 use std::fmt::Debug;
 use std::path::Path;
@@ -84,7 +86,6 @@ pub struct AnnotatorConfig {
 struct FlashContext<'a> {
     error: Option<&'a str>,
 }
-
 
 #[get("/")]
 async fn index(db: AnnotatorDbConn, flash: Option<FlashMessage<'_>>, auth: Auth<'_>) -> WebResult<Template> {
@@ -224,6 +225,8 @@ fn labeler_url(experiment_id: i32) -> String {
 }
 
 
+embed_migrations!();
+
 #[rocket::main]
 #[allow(unused_must_use)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -245,6 +248,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .attach(AnnotatorDbConn::fairing())
         .attach(Template::fairing())
         .attach(cors)
+        .attach(AdHoc::on_ignite("Diesel migrations", |rocket| {
+            Box::pin(async move {
+                let db = AnnotatorDbConn::get_one(&rocket).await.unwrap();
+                db.run(|c| {
+                    embedded_migrations::run(&*c)
+                }).await
+                    .expect("Error running Diesel migrations");
+                rocket
+            })
+        }))
         .attach(AdHoc::on_ignite("rocket_auth init", |rocket| {
             Box::pin(async move {
                 let postgres_connection_path: String = rocket.figment()
