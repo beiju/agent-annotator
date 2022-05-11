@@ -231,7 +231,7 @@ embed_migrations!();
 #[allow(unused_must_use)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cors = rocket_cors::CorsOptions {
-        allowed_origins: AllowedOrigins::some_exact(&["http://127.0.0.1:3000"]),
+        allowed_origins: AllowedOrigins::some_exact(&["http://127.0.0.1:3000", "http://127.0.0.1:8011"]),
         allowed_methods: vec![Method::Get, Method::Post].into_iter().map(From::from).collect(),
         allowed_headers: AllowedHeaders::some(&["Authorization", "Accept", "Content-Type"]),
         allow_credentials: true,
