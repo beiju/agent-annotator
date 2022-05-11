@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult};
 use diesel::prelude::*;
+use opencv::prelude::*;
+use opencv::videoio;
 
 use crate::schema::*;
 use crate::{WebError, WebResult};
@@ -58,13 +60,12 @@ pub fn run_discovery(conn: &PgConnection, data_path: &str) -> WebResult<()> {
         let video_path = file.path().join("camera.avi-0000.avi");
         let video_path_str = video_path.to_str()
             .ok_or(WebError::NonUnicodePath)?;
-        // let video = video::VideoWithStream::new(video_path_str);
+        let mut video = videoio::VideoCapture::from_file(video_path_str, videoio::CAP_ANY)?;
 
         let mut num_frames = 0;
-        // for frame in video.frames() {
-        //     frame?;
-        //     num_frames += 1;
-        // }
+        while video.grab()? {
+            num_frames += 1;
+        }
 
         let new_experiment = NewExperiment {
             folder_name: &folder_name_str,
