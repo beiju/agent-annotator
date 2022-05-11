@@ -3278,6 +3278,7 @@ dependencies = [
  "chrono",
  "diesel",
  "diesel_migrations",
+ "itertools",
  "opencv",
  "rocket",
  "rocket_auth",

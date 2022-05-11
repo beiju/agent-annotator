@@ -4,8 +4,10 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult};
 use diesel::prelude::*;
+use itertools::Itertools;
 use opencv::prelude::*;
 use opencv::videoio;
+
 
 use crate::schema::*;
 use crate::{WebError, WebResult};
@@ -48,36 +50,46 @@ pub fn run_discovery(conn: &PgConnection, data_path: &str) -> WebResult<()> {
 
     let data_path = Path::new(data_path);
 
-    for file in std::fs::read_dir(data_path)? {
-        let file = file?;
+    std::fs::read_dir(data_path)?.into_iter()
+        .map_ok(|file| {
+            if !file.file_type()?.is_dir() { return Ok(()); }
 
-        if !file.file_type()?.is_dir() { continue; }
+            let folder_name_str = file.file_name().into_string()
+                .map_err(|_| WebError::NonUnicodePath)?;
 
-        let folder_name_str = file.file_name().into_string()
-            .map_err(|_| WebError::NonUnicodePath)?;
+            // turns out decoding video is hell!
+            let video_path = file.path().join("camera.avi-0000.avi");
+            let video_path_str = video_path.to_str()
+                .ok_or(WebError::NonUnicodePath)?;
+            let mut video = videoio::VideoCapture::from_file(video_path_str, videoio::CAP_ANY)?;
 
-        // turns out decoding video is hell!
-        let video_path = file.path().join("camera.avi-0000.avi");
-        let video_path_str = video_path.to_str()
-            .ok_or(WebError::NonUnicodePath)?;
-        let mut video = videoio::VideoCapture::from_file(video_path_str, videoio::CAP_ANY)?;
+            let mut num_frames = 0;
+            while video.grab()? {
+                num_frames += 1;
+            }
 
-        let mut num_frames = 0;
-        while video.grab()? {
-            num_frames += 1;
-        }
+            let new_experiment = NewExperiment {
+                folder_name: &folder_name_str,
+                num_video_frames: num_frames,
+            };
 
-        let new_experiment = NewExperiment {
-            folder_name: &folder_name_str,
-            num_video_frames: num_frames,
-        };
-        insert_into(experiments)
-            .values(&new_experiment)
-            .on_conflict(folder_name)
-            .do_update()
-            .set(&new_experiment)
-            .execute(conn)?;
-    }
+            insert_into(experiments)
+                .values(&new_experiment)
+                .on_conflict(folder_name)
+                .do_update()
+                .set(&new_experiment)
+                .execute(conn)?;
+
+            Ok(())
+        })
+        .flatten()
+        .map(|item: WebResult<_>| {
+            item.unwrap_or_else(|err| {
+                error!("Error parsing video: {:?}", err);
+                ()
+            })
+        })
+        .count(); // Lazy way of getting the iterator to run
 
     Ok(())
 }
