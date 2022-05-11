@@ -1,9 +1,8 @@
 [default]
 data_path = "data"
 secret_key = # insert a secret key
+port = 8011
+use_react_dev_server = false
 
 [default.databases]
 annotator = { url = "path to postgres database" }
-
-[debug]
-port = 8011

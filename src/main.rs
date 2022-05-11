@@ -80,6 +80,7 @@ pub type WebResult<T> = Result<T, WebError>;
 #[derive(serde::Deserialize)]
 pub struct AnnotatorConfig {
     data_path: String,
+    use_react_dev_server: bool
 }
 
 #[derive(Serialize)]
@@ -88,9 +89,9 @@ struct FlashContext<'a> {
 }
 
 #[get("/")]
-async fn index(db: AnnotatorDbConn, flash: Option<FlashMessage<'_>>, auth: Auth<'_>) -> WebResult<Template> {
+async fn index(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, flash: Option<FlashMessage<'_>>, auth: Auth<'_>) -> WebResult<Template> {
     if auth.is_auth() {
-        list(db, auth).await
+        list(db, config, auth).await
     } else {
         Ok(Template::render("index", FlashContext {
             error: flash.as_ref().map(|f| f.message()),
@@ -146,26 +147,26 @@ fn logout(auth: Auth<'_>) -> Result<Redirect, rocket_auth::Error> {
     Ok(Redirect::to(uri!(index)))
 }
 
-async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
+async fn list(db: AnnotatorDbConn, config: &AnnotatorConfig, _auth: Auth<'_>) -> WebResult<Template> {
     #[derive(Serialize)]
     struct ExperimentContext<'a> {
+        id: i32,
         folder_name: String,
         num_video_frames: i32,
         claimed_by: Option<String>,
         claim_uri: rocket::http::uri::Origin<'a>,
         release_uri: rocket::http::uri::Origin<'a>,
-        labeler_uri: String,
     }
 
     impl From<experiments::Experiment> for ExperimentContext<'_> {
         fn from(e: experiments::Experiment) -> Self {
             Self {
+                id: e.id,
                 folder_name: e.folder_name,
                 num_video_frames: e.num_video_frames,
                 claimed_by: e.claimed_by.map(|c| format!("{}", c)), // TODO
                 claim_uri: uri!(claim(e.id)),
                 release_uri: uri!(release(e.id)),
-                labeler_uri: labeler_url(e.id),
             }
         }
     }
@@ -173,12 +174,18 @@ async fn list(db: AnnotatorDbConn, _auth: Auth<'_>) -> WebResult<Template> {
     #[derive(Serialize)]
     struct ExperimentListContext<'a> {
         experiments: Vec<ExperimentContext<'a>>,
+        labeler_base_uri: &'a str,
     }
 
     let experiments = db.run(|c| experiments::get_all_experiments(c)).await?;
 
     Ok(Template::render("experiment-list", ExperimentListContext {
-        experiments: experiments.into_iter().map(|e| e.into()).collect()
+        experiments: experiments.into_iter().map(|e| e.into()).collect(),
+        labeler_base_uri: if config.use_react_dev_server {
+            "//127.0.0.1:3000/annotator?experiment_id="
+        } else {
+            "/annotator?experiment_id="
+        }
     }))
 }
 
@@ -210,8 +217,8 @@ async fn release(db: AnnotatorDbConn, user: User, experiment_id: i32) -> Result<
 }
 
 #[get("/annotate?<experiment_id>")]
-async fn annotate(_user: User, experiment_id: i32) -> std::io::Result<Either<Redirect, NamedFile>> {
-    if rocket::config::Config::DEFAULT_PROFILE == "debug" {
+async fn annotate(_user: User, config: &State<AnnotatorConfig>, experiment_id: i32) -> std::io::Result<Either<Redirect, NamedFile>> {
+    if config.use_react_dev_server {
         let r = Redirect::to(labeler_url(experiment_id));
         Ok(Either::Left(r))
     } else {
@@ -230,14 +237,7 @@ embed_migrations!();
 #[rocket::main]
 #[allow(unused_must_use)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cors = rocket_cors::CorsOptions {
-        allowed_origins: AllowedOrigins::some_exact(&["http://127.0.0.1:3000", "http://127.0.0.1:8011"]),
-        allowed_methods: vec![Method::Get, Method::Post].into_iter().map(From::from).collect(),
-        allowed_headers: AllowedHeaders::some(&["Authorization", "Accept", "Content-Type"]),
-        allow_credentials: true,
-        ..Default::default()
-    }
-        .to_cors()?;
+
 
     rocket::build()
         .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate])
@@ -247,7 +247,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .attach(AdHoc::config::<AnnotatorConfig>())
         .attach(AnnotatorDbConn::fairing())
         .attach(Template::fairing())
-        .attach(cors)
+        .attach(AdHoc::on_ignite("CORS", |rocket| {
+            Box::pin(async move {
+                if rocket.state::<AnnotatorConfig>().unwrap().use_react_dev_server {
+                    let cors = rocket_cors::CorsOptions {
+                        allowed_origins: AllowedOrigins::some_exact(&["http://127.0.0.1:3000", "http://127.0.0.1:8011"]),
+                        allowed_methods: vec![Method::Get, Method::Post].into_iter().map(From::from).collect(),
+                        allowed_headers: AllowedHeaders::some(&["Authorization", "Accept", "Content-Type"]),
+                        allow_credentials: true,
+                        ..Default::default()
+                    }
+                        .to_cors()
+                        .expect("Error building CORS object");
+
+                    rocket.attach(cors)
+                } else {
+                    rocket
+                }
+            })
+        }))
         .attach(AdHoc::on_ignite("Diesel migrations", |rocket| {
             Box::pin(async move {
                 let db = AnnotatorDbConn::get_one(&rocket).await.unwrap();
