@@ -44,6 +44,9 @@ pub enum WebError {
     #[error(transparent)]
     OpenCV(#[from] opencv::Error),
 
+    #[error(transparent)]
+    Join(#[from] rocket::tokio::task::JoinError),
+
     #[error("Non-unicode path")]
     NonUnicodePath,
 }
@@ -192,7 +195,7 @@ async fn list(db: AnnotatorDbConn, config: &AnnotatorConfig, _auth: Auth<'_>) ->
 #[post("/list/refresh")]
 async fn list_refresh(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, _auth: Auth<'_>) -> WebResult<Redirect> {
     let data_path = config.data_path.clone();
-    db.run(move |c| experiments::run_discovery(c, &data_path)).await?;
+    experiments::run_discovery(&db, &data_path).await?;
     Ok(Redirect::to(uri!(index)))
 }
 
