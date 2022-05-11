@@ -51,6 +51,7 @@ pub async fn run_discovery(db: &AnnotatorDbConn, data_path: &str) -> WebResult<(
 
     let data_path = Path::new(data_path);
 
+    // This isn't actually running concurrently and I don't know why
     rocket::futures::stream::iter(std::fs::read_dir(data_path)?.into_iter())
         .then(|file| async move {
             let file = file?;
