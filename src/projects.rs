@@ -1,6 +1,7 @@
 use serde::Serialize;
 use diesel::{PgConnection, Queryable, QueryResult};
 use diesel::prelude::*;
+use crate::schema::projects::dsl::projects;
 
 #[derive(Serialize, Queryable)]
 pub struct Project {
@@ -27,4 +28,17 @@ pub fn get_user_projects(conn: &PgConnection, user_id: i32) -> QueryResult<(Vec<
         .get_results::<Project>(conn)?;
 
     Ok((own_projects, other_projects))
+}
+
+pub fn new_project(conn: &PgConnection, user_id: i32, project_name: &str, folder_name: &str) -> QueryResult<()> {
+    use crate::schema::projects::dsl as projects;
+
+    diesel::insert_into(projects::projects)
+        .values((
+            projects::name.eq(project_name),
+            projects::experiments_dir.eq(folder_name),
+            projects::owner.eq(user_id)
+        ))
+        .execute(conn)
+        .map(|_| ())
 }

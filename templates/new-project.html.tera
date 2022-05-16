@@ -1,0 +1,29 @@
+{% extends "base" %}
+{% block title %}Projects{% endblock title %}
+{% block body %}
+    <div class="container mt-5">
+        <div class="row">
+            <h1>New Project</h1>
+            <form method="post">
+                <div class="mb-3 row">
+                    <label for="name" class="col-sm-3 col-form-label">Project Name</label>
+                    <div class="col-sm-9">
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                </div>
+                <div class="mb-3 row">
+                    <label for="folder" class="col-sm-3 col-form-label">Folder</label>
+                    <div class="col-sm-9">
+                        <select class="form-select" name="folder_name" aria-label="Select a folder">
+                            <option selected>Select a folder</option>
+                            {% for folder in folders %}
+                                <option value="{{folder}}">{{folder}}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-primary mb-2" type="submit">Add project</button>
+            </form>
+        </div>
+    </div>
+{% endblock body %}

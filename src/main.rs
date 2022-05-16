@@ -12,6 +12,7 @@ extern crate diesel_migrations;
 
 use std::fmt::Debug;
 use std::path::Path;
+use itertools::Itertools;
 use rocket::{
     request::FlashMessage,
     http::Status,
@@ -21,10 +22,10 @@ use rocket::{
     Either,
     State,
     response,
-    response::{Flash, Redirect}
+    response::{Flash, Redirect},
 };
 use rocket::http::Method;
-use rocket_auth::{Auth, Login, Signup, User, Users};
+use rocket_auth::{AdminUser, Auth, Login, Signup, User, Users};
 use rocket_cors::{AllowedHeaders, AllowedOrigins};
 use rocket_dyn_templates::Template;
 use serde::Serialize;
@@ -84,7 +85,7 @@ pub type WebResult<T> = Result<T, WebError>;
 #[derive(serde::Deserialize)]
 pub struct AnnotatorConfig {
     data_path: String,
-    use_react_dev_server: bool
+    use_react_dev_server: bool,
 }
 
 #[derive(Serialize)]
@@ -118,7 +119,8 @@ async fn user_projects_list(db: AnnotatorDbConn, user: &User) -> WebResult<Templ
         own_projects,
         other_projects,
         is_admin: user.is_admin,
-    }))}
+    }))
+}
 
 #[derive(Responder)]
 enum MaybeFlashRedirect {
@@ -160,6 +162,38 @@ async fn post_signup(auth: Auth<'_>, form: Form<Signup>) -> Result<MaybeFlashRed
         }
         Err(err) => { Err(err) }
     }
+}
+
+#[get("/new-project")]
+async fn new_project(_user: AdminUser, config: &State<AnnotatorConfig>) -> WebResult<Template> {
+    #[derive(Serialize)]
+    struct NewProjectContext {
+        folders: Vec<String>,
+    }
+    let data_path = Path::new(&config.data_path);
+
+    let folders = std::fs::read_dir(data_path)?
+        .map_ok(|file| file.file_name().into_string())
+        .collect::<Result<Result<Vec<_>, _>, _>>()?
+        .map_err(|_| WebError::NonUnicodePath)?;
+
+    Ok(Template::render("new-project", NewProjectContext {
+        folders
+    }))
+}
+
+#[derive(FromForm)]
+struct NewProjectForm {
+    name: String,
+    folder_name: String,
+}
+
+#[post("/new-project", data = "<data>")]
+async fn new_project_post(db: AnnotatorDbConn, user: AdminUser, data: Form<NewProjectForm>) -> WebResult<Redirect> {
+    // TODO Validate that name and folder are nonempty and folder exists
+    db.run(move |c| projects::new_project(c, user.id(), &data.name, &data.folder_name)).await?;
+
+    Ok(Redirect::to(uri!(index)))
 }
 
 #[get("/logout")]
@@ -206,7 +240,7 @@ async fn list(db: AnnotatorDbConn, config: &AnnotatorConfig, _auth: Auth<'_>) ->
             "//127.0.0.1:3000/annotator?experiment_id="
         } else {
             "/annotator?experiment_id="
-        }
+        },
     }))
 }
 
@@ -259,7 +293,7 @@ embed_migrations!();
 #[allow(unused_must_use)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rocket::build()
-        .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate])
+        .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate, new_project, new_project_post])
         .mount("/public", FileServer::from("public"))
         .mount("/annotator", FileServer::from("public/annotator"))
         .mount("/api", api::routes())
