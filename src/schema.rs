@@ -1,6 +1,7 @@
 table! {
     experiments (id) {
         id -> Int4,
+        project_id -> Int4,
         folder_name -> Text,
         num_video_frames -> Int4,
         claimed_by -> Nullable<Int4>,
@@ -22,7 +23,7 @@ table! {
         id -> Int4,
         name -> Text,
         experiments_dir -> Text,
-        owner -> Nullable<Int4>,
+        owner -> Int4,
     }
 }
 
@@ -35,6 +36,7 @@ table! {
     }
 }
 
+joinable!(experiments -> projects (project_id));
 joinable!(experiments -> users (claimed_by));
 joinable!(project_members -> projects (project_id));
 joinable!(project_members -> users (user_id));

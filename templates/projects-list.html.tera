@@ -19,7 +19,7 @@
                 <ul>
                     {% for project in other_projects %}
                         <li>
-                            {{project.name}}
+                            <a href="/projects/{{project.id}}">{{project.name}}</a>
                         </li>
                     {% endfor %}
                 </ul>

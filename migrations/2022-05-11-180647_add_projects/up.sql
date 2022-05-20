@@ -4,7 +4,7 @@ create table projects
     name            text not null,
     experiments_dir text not null,
 
-    owner           integer references users (id)
+    owner           integer references users (id) not null
 );
 
 create table project_members

@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 
 use serde::Serialize;
 use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult};
+use diesel::dsl::exists;
 use diesel::prelude::*;
 use opencv::prelude::*;
 use opencv::videoio;
@@ -14,8 +15,26 @@ use crate::schema::*;
 use crate::{AnnotatorDbConn, WebError, WebResult};
 
 #[derive(Serialize, Queryable)]
+pub struct Project {
+    pub id: i32,
+    pub name: String,
+    pub experiments_dir: String,
+    pub owner: i32,
+}
+
+#[derive(Serialize, Queryable)]
+pub struct User {
+    pub id: i32,
+    pub email: String,
+    pub password: String,
+    pub is_admin: Option<bool>,
+}
+
+#[derive(Serialize, Queryable)]
 pub struct Experiment {
     pub id: i32,
+    pub project_id: i32,
+
     pub folder_name: String,
     pub num_video_frames: i32,
 
@@ -28,14 +47,75 @@ pub struct Experiment {
 #[derive(Insertable, AsChangeset)]
 #[table_name = "experiments"]
 struct NewExperiment {
+    pub project_id: i32,
     pub folder_name: String,
     pub num_video_frames: i32,
 }
 
-pub fn get_all_experiments(conn: &PgConnection) -> QueryResult<Vec<Experiment>> {
-    use crate::schema::experiments::dsl::*;
+pub fn get_project(conn: &PgConnection, project_id: i32) -> QueryResult<Option<Project>> {
+    use crate::schema::projects::dsl as projects_dsl;
 
-    experiments.get_results(conn)
+    projects_dsl::projects
+        .find(project_id)
+        .get_result(conn).optional()
+}
+
+pub fn get_experiments_for_project(conn: &PgConnection, project_id: i32) -> QueryResult<Option<(Project, Vec<Experiment>)>> {
+    use crate::schema::experiments::dsl as experiments_dsl;
+    get_project(conn, project_id)
+        .and_then(|maybe_project| {
+            maybe_project
+                .map(|project| {
+                    experiments_dsl::experiments
+                        .filter(experiments_dsl::project_id.eq(project_id))
+                        .get_results(conn)
+                        .map(|experiments| (project, experiments))
+                })
+                .transpose()
+        })
+}
+
+pub fn get_members_for_project(conn: &PgConnection, project_id: i32) -> QueryResult<Vec<User>> {
+    use crate::schema::users::dsl as users_dsl;
+    use crate::schema::project_members::dsl as project_members_dsl;
+
+    users_dsl::users
+        .left_join(project_members_dsl::project_members.on(users_dsl::id.eq(project_members_dsl::user_id)))
+        .filter(project_members_dsl::project_id.eq(project_id))
+        .select(users_dsl::users::all_columns())
+        .get_results(conn)
+}
+
+pub fn get_potential_members_for_project(conn: &PgConnection, project_id: i32) -> QueryResult<Vec<User>> {
+    use crate::schema::users::dsl as users_dsl;
+    use crate::schema::project_members::dsl as project_members_dsl;
+    use crate::schema::projects::dsl as projects_dsl;
+
+    let user_in_project = exists(
+        project_members_dsl::project_members
+            .filter(project_members_dsl::user_id.eq(users_dsl::id))
+            .filter(project_members_dsl::project_id.eq(project_id))
+    );
+
+    // this smells very inefficient but the db is small, it should be fine
+    let user_owns_this_project = exists(
+        projects_dsl::projects
+            .filter(projects_dsl::id.eq(project_id))
+            .filter(projects_dsl::owner.eq(users_dsl::id))
+    );
+
+    users_dsl::users
+        .filter(diesel::dsl::not(user_in_project))
+        .filter(diesel::dsl::not(user_owns_this_project))
+        .get_results(conn)
+}
+
+pub fn add_member_to_project(conn: &PgConnection, project_id: i32, member_id: i32) -> QueryResult<()> {
+    use crate::schema::project_members::dsl as project_members_dsl;
+    diesel::insert_into(project_members_dsl::project_members)
+        .values((project_members_dsl::project_id.eq(project_id), project_members_dsl::user_id.eq(member_id)))
+        .execute(conn)
+        .map(|_| ())
 }
 
 pub fn get_experiment(conn: &PgConnection, experiment_id: i32) -> QueryResult<Experiment> {
@@ -45,11 +125,11 @@ pub fn get_experiment(conn: &PgConnection, experiment_id: i32) -> QueryResult<Ex
         .get_result::<Experiment>(conn)
 }
 
-pub async fn run_discovery(db: &AnnotatorDbConn, data_path: &str) -> WebResult<()> {
+pub async fn run_discovery(db: &AnnotatorDbConn, parent_path: &str, project_folder: &str, project_id_: i32) -> WebResult<()> {
     use diesel::dsl::*;
     use crate::schema::experiments::dsl::*;
 
-    let data_path = Path::new(data_path);
+    let data_path = Path::new(parent_path).join(project_folder);
 
     // This isn't actually running concurrently and I don't know why
     rocket::futures::stream::iter(std::fs::read_dir(data_path)?.into_iter())
@@ -74,6 +154,7 @@ pub async fn run_discovery(db: &AnnotatorDbConn, data_path: &str) -> WebResult<(
                 }
 
                 Ok::<_, WebError>(NewExperiment {
+                    project_id: project_id_,
                     folder_name: folder_name_str,
                     num_video_frames: num_frames,
                 })
@@ -100,7 +181,6 @@ pub async fn run_discovery(db: &AnnotatorDbConn, data_path: &str) -> WebResult<(
 
                 Ok(None) => {}
             }
-
         })
         .await;
 

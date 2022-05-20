@@ -1,7 +1,6 @@
 use serde::Serialize;
 use diesel::{PgConnection, Queryable, QueryResult};
 use diesel::prelude::*;
-use crate::schema::projects::dsl::projects;
 
 #[derive(Serialize, Queryable)]
 pub struct Project {
@@ -9,7 +8,7 @@ pub struct Project {
     pub name: String,
     pub folder_name: String,
 
-    pub owner: Option<i32>,
+    pub owner: i32,
 }
 
 pub fn get_user_projects(conn: &PgConnection, user_id: i32) -> QueryResult<(Vec<Project>, Vec<Project>)> {

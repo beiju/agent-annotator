@@ -51,6 +51,9 @@ pub enum WebError {
 
     #[error("Non-unicode path")]
     NonUnicodePath,
+
+    #[error("Couldn't find project {0}")]
+    ProjectNotFound(i32),
 }
 
 trait UserFacingError {
@@ -202,13 +205,14 @@ fn logout(auth: Auth<'_>) -> Result<Redirect, rocket_auth::Error> {
     Ok(Redirect::to(uri!(index)))
 }
 
-async fn list(db: AnnotatorDbConn, config: &AnnotatorConfig, _auth: Auth<'_>) -> WebResult<Template> {
+#[get("/projects/<project_id>")]
+async fn project_detail(db: AnnotatorDbConn, project_id: i32, config: &State<AnnotatorConfig>, user: User) -> WebResult<Template> {
     #[derive(Serialize)]
     struct ExperimentContext<'a> {
         id: i32,
         folder_name: String,
         num_video_frames: i32,
-        claimed_by: Option<String>,
+        claimed_by: Option<i32>,
         claim_uri: rocket::http::uri::Origin<'a>,
         release_uri: rocket::http::uri::Origin<'a>,
     }
@@ -219,7 +223,7 @@ async fn list(db: AnnotatorDbConn, config: &AnnotatorConfig, _auth: Auth<'_>) ->
                 id: e.id,
                 folder_name: e.folder_name,
                 num_video_frames: e.num_video_frames,
-                claimed_by: e.claimed_by.map(|c| format!("{}", c)), // TODO
+                claimed_by: e.claimed_by,
                 claim_uri: uri!(claim(e.id)),
                 release_uri: uri!(release(e.id)),
             }
@@ -227,28 +231,96 @@ async fn list(db: AnnotatorDbConn, config: &AnnotatorConfig, _auth: Auth<'_>) ->
     }
 
     #[derive(Serialize)]
-    struct ExperimentListContext<'a> {
-        experiments: Vec<ExperimentContext<'a>>,
-        labeler_base_uri: &'a str,
+    struct UserContext {
+        id: i32,
+        name: String,
+        // TODO remove_from_project_uri
     }
 
-    let experiments = db.run(|c| experiments::get_all_experiments(c)).await?;
+    impl From<experiments::User> for UserContext {
+        fn from(u: experiments::User) -> Self {
+            Self {
+                id: u.id,
+                name: u.email,
+            }
+        }
+    }
 
-    Ok(Template::render("experiment-list", ExperimentListContext {
-        experiments: experiments.into_iter().map(|e| e.into()).collect(),
-        labeler_base_uri: if config.use_react_dev_server {
-            "//127.0.0.1:3000/annotator?experiment_id="
+    #[derive(Serialize)]
+    struct ExperimentListContext<'a> {
+        user_id: i32,
+        project_name: &'a str,
+        experiments: Vec<ExperimentContext<'a>>,
+        labeler_base_uri: &'a str,
+        refresh_uri: Option<rocket::http::uri::Origin<'a>>,
+        members: Vec<UserContext>,
+        potential_members: Vec<UserContext>,
+        add_member_uri: Option<rocket::http::uri::Origin<'a>>,
+    }
+
+    if let Some((project, experiments)) = db.run(move |c| {
+        experiments::get_experiments_for_project(c, project_id)
+    }).await? {
+        let members = if user.is_admin {
+            db.run(move |c| {
+                experiments::get_members_for_project(c, project_id)
+            }).await?
         } else {
-            "/annotator?experiment_id="
-        },
-    }))
+            Vec::new()
+        };
+
+        let potential_members = if user.is_admin {
+            db.run(move |c| {
+                experiments::get_potential_members_for_project(c, project_id)
+            }).await?
+        } else {
+            Vec::new()
+        };
+
+        Ok(Template::render("project-detail", ExperimentListContext {
+            user_id: user.id(),
+            project_name: &project.name,
+            experiments: experiments.into_iter().map(|e| e.into()).collect(),
+            labeler_base_uri: if config.use_react_dev_server {
+                "//127.0.0.1:3000/annotator?experiment_id="
+            } else {
+                "/annotator?experiment_id="
+            },
+            refresh_uri: if user.is_admin { Some(uri!(list_refresh(project_id))) } else { None },
+            members: members.into_iter().map(|e| e.into()).collect(),
+            potential_members: potential_members.into_iter().map(|e| e.into()).collect(),
+            add_member_uri: if user.is_admin { Some(uri!(add_member(project_id))) } else { None },
+        }))
+    } else {
+        Err(WebError::ProjectNotFound(project_id))
+    }
 }
 
-#[post("/list/refresh")]
-async fn list_refresh(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, _auth: Auth<'_>) -> WebResult<Redirect> {
+#[post("/projects/<project_id>/refresh")]
+async fn list_refresh(db: AnnotatorDbConn, project_id: i32, config: &State<AnnotatorConfig>, _user: AdminUser) -> WebResult<Redirect> {
     let data_path = config.data_path.clone();
-    experiments::run_discovery(&db, &data_path).await?;
-    Ok(Redirect::to(uri!(index)))
+    if let Some(project) = db.run(move |c| {
+        experiments::get_project(c, project_id)
+    }).await? {
+        experiments::run_discovery(&db, &data_path, &project.experiments_dir, project_id).await?;
+        Ok(Redirect::to(uri!(project_detail(project_id))))
+    } else {
+        Err(WebError::ProjectNotFound(project_id))
+    }
+}
+
+#[derive(FromForm)]
+struct AddMemberForm {
+    new_member_id: i32,
+}
+
+#[post("/projects/<project_id>/add_member", data = "<data>")]
+async fn add_member(db: AnnotatorDbConn, project_id: i32, data: Form<AddMemberForm>, _user: AdminUser) -> WebResult<Redirect> {
+    db.run(move |c| {
+        experiments::add_member_to_project(c, project_id, data.new_member_id)
+    }).await?;
+
+    Ok(Redirect::to(uri!(project_detail(project_id))))
 }
 
 #[post("/claim?<experiment_id>")]
@@ -293,7 +365,7 @@ embed_migrations!();
 #[allow(unused_must_use)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rocket::build()
-        .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate, new_project, new_project_post])
+        .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate, new_project, new_project_post, project_detail, add_member])
         .mount("/public", FileServer::from("public"))
         .mount("/annotator", FileServer::from("public/annotator"))
         .mount("/api", api::routes())

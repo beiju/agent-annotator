@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     {% block head %}
-    <link rel="stylesheet" href="public/bootstrap-5.0.2-dist/css/bootstrap.css" />
+    <link rel="stylesheet" href="/public/bootstrap-5.0.2-dist/css/bootstrap.css" />
     <title>{% block title %}{% endblock title %} - Annotator</title>
     {% endblock head %}
 </head>

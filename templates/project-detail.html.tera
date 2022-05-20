@@ -3,20 +3,28 @@
 {% block body %}
     <div class="container mt-5">
         <div class="row">
-            <h1>Experiments</h1>
-            <form action="/list/refresh" method="post">
+            <h1>{{ project_name }}</h1>
+
+            <h2>Experiments</h2>
+            {% if refresh_uri %}
+            <form action="{{ refresh_uri }}" method="post">
                 <input class="btn" type="submit" value="Refresh experiments list" />
             </form>
+            {% endif %}
 
             {% if experiments %}
             <ul>
                 {% for experiment in experiments %}
                     <li>
                         {{experiment.folder_name}}: {{experiment.num_video_frames}} frames
-                        {% if experiment.claimed_by %}
+                        {% if experiment.claimed_by == user_id %}
                             <a href="{{labeler_base_uri}}{{experiment.id}}" class="btn btn-outline-primary">Resume Annotating</a>
                             <form action="{{experiment.release_uri}}" method="post">
                                 <input class="btn btn-outline-danger" type="submit" value="Un-assign Me" />
+                            </form>
+                        {% elif experiment.claimed_by %}
+                            <form action="{{experiment.release_uri}}" method="post">
+                                <input class="btn btn-outline-danger" type="submit" value="Force Un-assign" />
                             </form>
                         {% else %}
                             <form action="{{experiment.claim_uri}}" method="post">
@@ -30,5 +38,27 @@
             <p>No experiments registered yet</p>
             {% endif %}
         </div>
+
+        {% if members %}
+            <h2>Members</h2>
+            <ul>
+                {% for member in members %}
+                    <li>{{ member.name }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {% if potential_members %}
+            <h2>Add Member</h2>
+            <form action="{{add_member_uri}}" method="post">
+                <select name="new_member_id">
+                    <option>Select member to add</option>
+                    {% for member in potential_members %}
+                        <option value="{{ member.id }}">{{ member.name }}</option>
+                    {% endfor %}
+                </select>
+                <input class="btn btn-outline-primary" type="submit" value="Add Member" />
+            </form>
+        {% endif %}
     </div>
 {% endblock body %}
