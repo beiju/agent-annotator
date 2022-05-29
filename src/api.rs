@@ -32,11 +32,15 @@ pub async fn set_label(db: AnnotatorDbConn, user: User, id: i32, label: Json<ser
 
 #[get("/frame.jpg?<experiment>&<frame>")]
 pub async fn frame(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, experiment: i32, frame: usize) -> WebResult<(ContentType, Vec<u8>)> {
-    let experiment = db.run(move |c| {
-        experiments::get_experiment(c, experiment)
+    let (experiment, project) = db.run(move |c| {
+        let experiment = experiments::get_experiment(c, experiment)?;
+        let project = experiments::get_project(c, experiment.project_id)?
+            .ok_or(WebError::ProjectNotFound(experiment.project_id))?;
+        Ok::<_, WebError>((experiment, project))
     }).await?;
 
     let video_path = Path::new(&config.data_path)
+        .join(project.experiments_dir)
         .join(experiment.folder_name)
         .join("camera.avi-0000.avi");
     let video_path_str = video_path.to_str()
