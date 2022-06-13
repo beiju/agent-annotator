@@ -149,7 +149,8 @@ pub async fn run_discovery(db: &AnnotatorDbConn, parent_path: &str, project_fold
                 let mut video = videoio::VideoCapture::from_file(video_path_str, videoio::CAP_ANY)?;
 
                 let mut num_frames = 0;
-                while video.grab()? {
+                let mut image = Mat::default();
+                while video.read(&mut image)? {
                     num_frames += 1;
                 }
 
@@ -207,12 +208,10 @@ pub fn claim(conn: &PgConnection, user_id: i32, experiment_id: i32) -> QueryResu
         .map(|_| ())
 }
 
-pub fn release(conn: &PgConnection, user_id: i32, experiment_id: i32) -> QueryResult<()> {
+pub fn release(conn: &PgConnection, experiment_id: i32) -> QueryResult<()> {
     use crate::schema::experiments::dsl::*;
 
-    // TODO Some sort of error when the user tries to release something they don't own
     diesel::update(experiments.find(experiment_id))
-        .filter(claimed_by.eq(user_id))
         .set(&UpdateClaim {
             claimed_by: None,
             claimed_at: None,

@@ -2,6 +2,7 @@ mod experiments;
 mod schema;
 mod api;
 mod projects;
+mod video_cache;
 
 #[macro_use]
 extern crate rocket;
@@ -31,6 +32,7 @@ use rocket_dyn_templates::Template;
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
+use crate::video_cache::VideoCache;
 
 #[rocket_sync_db_pools::database("annotator")]
 pub struct AnnotatorDbConn(diesel::PgConnection);
@@ -334,9 +336,9 @@ async fn claim(db: AnnotatorDbConn, user: User, experiment_id: i32) -> Result<Re
 }
 
 #[post("/release?<experiment_id>")]
-async fn release(db: AnnotatorDbConn, user: User, experiment_id: i32) -> Result<Redirect, Status> {
+async fn release(db: AnnotatorDbConn, experiment_id: i32) -> Result<Redirect, Status> {
     db.run(move |c| {
-        experiments::release(c, user.id(), experiment_id)
+        experiments::release(c, experiment_id)
     }).await
         .map_err(|_| Status::InternalServerError)?;
 
@@ -417,6 +419,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 rocket.manage(users)
             })
         }))
+        .manage(VideoCache::new())
         .launch().await;
 
     Ok(())
