@@ -2,7 +2,6 @@ mod experiments;
 mod schema;
 mod api;
 mod projects;
-mod video_cache;
 
 #[macro_use]
 extern crate rocket;
@@ -32,7 +31,6 @@ use rocket_dyn_templates::Template;
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
-use crate::video_cache::VideoCache;
 
 #[rocket_sync_db_pools::database("annotator")]
 pub struct AnnotatorDbConn(diesel::PgConnection);
@@ -214,6 +212,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, config: &State<Ann
         id: i32,
         folder_name: String,
         num_video_frames: i32,
+        num_annotated_frames: usize,
         claimed_by: Option<i32>,
         claim_uri: rocket::http::uri::Origin<'a>,
         release_uri: rocket::http::uri::Origin<'a>,
@@ -225,6 +224,14 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, config: &State<Ann
                 id: e.id,
                 folder_name: e.folder_name,
                 num_video_frames: e.num_video_frames,
+                num_annotated_frames: e.label
+                    .and_then(|data| data.as_object()
+                        .expect("Label was not an object")
+                        .get("frames")
+                        .map(|frames| frames.as_object()
+                            .expect("Label.frames existed but was not an object")
+                            .len()))
+                    .unwrap_or(0),
                 claimed_by: e.claimed_by,
                 claim_uri: uri!(claim(e.id)),
                 release_uri: uri!(release(e.id)),
@@ -419,7 +426,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 rocket.manage(users)
             })
         }))
-        .manage(VideoCache::new())
         .launch().await;
 
     Ok(())

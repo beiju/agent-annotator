@@ -16,7 +16,7 @@
             <ul>
                 {% for experiment in experiments %}
                     <li>
-                        {{experiment.folder_name}}: {{experiment.num_video_frames}} frames
+                        {{experiment.folder_name}}: {{experiment.num_annotated_frames}}/{{experiment.num_video_frames}} frames
                         {% if experiment.claimed_by == user_id %}
                             <a href="{{labeler_base_uri}}{{experiment.id}}" class="btn btn-outline-primary">Resume Annotating</a>
                             <form action="{{experiment.release_uri}}" method="post">

@@ -11,6 +11,15 @@ table! {
 }
 
 table! {
+    images (id) {
+        id -> Int4,
+        experiment_id -> Int4,
+        frame_number -> Int4,
+        data -> Bytea,
+    }
+}
+
+table! {
     project_members (id) {
         id -> Int4,
         user_id -> Int4,
@@ -38,12 +47,14 @@ table! {
 
 joinable!(experiments -> projects (project_id));
 joinable!(experiments -> users (claimed_by));
+joinable!(images -> experiments (experiment_id));
 joinable!(project_members -> projects (project_id));
 joinable!(project_members -> users (user_id));
 joinable!(projects -> users (owner));
 
 allow_tables_to_appear_in_same_query!(
     experiments,
+    images,
     project_members,
     projects,
     users,

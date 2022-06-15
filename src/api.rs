@@ -1,8 +1,7 @@
 use rocket::http::ContentType;
 use rocket::serde::json::{json, Json};
-use rocket::State;
 use rocket_auth::User;
-use crate::{AnnotatorConfig, AnnotatorDbConn, experiments, VideoCache, WebResult};
+use crate::{AnnotatorDbConn, experiments, WebResult};
 
 #[get("/experiment?<id>")]
 pub async fn experiment(db: AnnotatorDbConn, id: i32) -> WebResult<serde_json::Value> {
@@ -27,8 +26,17 @@ pub async fn set_label(db: AnnotatorDbConn, user: User, id: i32, label: Json<ser
 }
 
 #[get("/frame.jpg?<experiment>&<frame>")]
-pub async fn frame(db: AnnotatorDbConn, config: &State<AnnotatorConfig>, video_cache: &State<VideoCache>, experiment: i32, frame: usize) -> WebResult<(ContentType, Vec<u8>)> {
-    let output = video_cache.get_frame(&db, &config.data_path, experiment, frame).await?;
+pub async fn frame(db: AnnotatorDbConn, experiment: i32, frame: usize) -> WebResult<(ContentType, Vec<u8>)> {
+    let output = db.run(move |c| {
+        use diesel::prelude::*;
+        use crate::schema::images::dsl as images;
+
+        images::images
+            .filter(images::experiment_id.eq(experiment))
+            .filter(images::frame_number.eq(frame as i32))
+            .select(images::data)
+            .get_result(c)
+    }).await?;
 
     Ok((ContentType::JPEG, output))
 }

@@ -8,8 +8,6 @@ use diesel::prelude::*;
 use opencv::prelude::*;
 use opencv::videoio;
 use rocket::futures::StreamExt;
-use rocket::tokio;
-
 
 use crate::schema::*;
 use crate::{AnnotatorDbConn, WebError, WebResult};
@@ -50,6 +48,14 @@ struct NewExperiment {
     pub project_id: i32,
     pub folder_name: String,
     pub num_video_frames: i32,
+}
+
+#[derive(Insertable)]
+#[table_name = "images"]
+struct NewImage {
+    experiment_id: i32,
+    frame_number: i32,
+    data: Vec<u8>,
 }
 
 pub fn get_project(conn: &PgConnection, project_id: i32) -> QueryResult<Option<Project>> {
@@ -126,9 +132,6 @@ pub fn get_experiment(conn: &PgConnection, experiment_id: i32) -> QueryResult<Ex
 }
 
 pub async fn run_discovery(db: &AnnotatorDbConn, parent_path: &str, project_folder: &str, project_id_: i32) -> WebResult<()> {
-    use diesel::dsl::*;
-    use crate::schema::experiments::dsl::*;
-
     let data_path = Path::new(parent_path).join(project_folder);
 
     // This isn't actually running concurrently and I don't know why
@@ -141,49 +144,94 @@ pub async fn run_discovery(db: &AnnotatorDbConn, parent_path: &str, project_fold
                 .map_err(|_| WebError::NonUnicodePath)?;
 
             info!("Reading {:?}", file.file_name());
-            let new_experiment = tokio::task::spawn_blocking(move || {
-                // turns out decoding video is hell!
-                let video_path = file.path().join("camera.avi-0000.avi");
-                let video_path_str = video_path.to_str()
-                    .ok_or(WebError::NonUnicodePath)?;
-                let mut video = videoio::VideoCapture::from_file(video_path_str, videoio::CAP_ANY)?;
+            let new_experiment = NewExperiment {
+                project_id: project_id_,
+                folder_name: folder_name_str,
+                num_video_frames: 0,
+            };
 
-                let mut num_frames = 0;
-                let mut image = Mat::default();
-                while video.read(&mut image)? {
-                    num_frames += 1;
-                }
-
-                Ok::<_, WebError>(NewExperiment {
-                    project_id: project_id_,
-                    folder_name: folder_name_str,
-                    num_video_frames: num_frames,
-                })
-            }).await??;
-
-            Ok(Some(new_experiment))
+            Ok(Some((new_experiment, file)))
         })
         .for_each_concurrent(Some(8), move |new_experiment: WebResult<_>| async move {
             match new_experiment {
                 Err(e) => {
                     error!("Error loading experiment: {:?}", e)
                 }
-                Ok(Some(new_experiment)) => {
-                    db.run(move |c| {
-                        insert_into(experiments)
-                            .values(&new_experiment)
-                            .on_conflict(folder_name)
-                            .do_update()
-                            .set(&new_experiment)
-                            .execute(c)
-                    }).await
-                        .expect("Error saving experiment to database");
+                Ok(Some((new_experiment, file))) => {
+                    if let Err(e) = insert_experiment(db, new_experiment, file).await {
+                        error!("Error saving experiment: {:?}", e)
+                    }
                 }
 
                 Ok(None) => {}
             }
         })
         .await;
+
+    Ok(())
+}
+
+async fn insert_experiment(db: &AnnotatorDbConn, new_experiment: NewExperiment, file: std::fs::DirEntry) -> WebResult<()> {
+    use diesel::dsl::*;
+    use crate::schema::experiments::dsl as experiments;
+    use crate::schema::images::dsl as images;
+    let name_dbg = new_experiment.folder_name.clone();
+    info!("Getting images for {}", name_dbg);
+
+    let experiment_id: i32 = db.run(move |c| {
+        let experiment_id = insert_into(experiments::experiments)
+            .values(&new_experiment)
+            .on_conflict(experiments::folder_name)
+            .do_update()
+            .set(&new_experiment)
+            .returning(experiments::id)
+            .get_result(c)?;
+
+        delete(images::images)
+            .filter(images::experiment_id.eq(experiment_id))
+            .execute(c)?;
+
+        Ok::<_, diesel::result::Error>(experiment_id)
+    }).await?;
+
+    // turns out decoding video is hell!
+    let video_path = file.path().join("camera.avi-0000.avi");
+    let video_path_str = video_path.to_str()
+        .ok_or(WebError::NonUnicodePath)?;
+    let mut video = videoio::VideoCapture::from_file(video_path_str, videoio::CAP_ANY)?;
+
+    let mut new_images = Vec::new();
+    let mut frame_number = 0;
+    let mut image = Mat::default();
+    while video.read(&mut image)? {
+        let mut output = opencv::core::Vector::new();
+        opencv::imgcodecs::imencode(".jpg", &image, &mut output, &opencv::core::Vector::new())?;
+
+        new_images.push(NewImage {
+            experiment_id,
+            frame_number,
+            data: output.to_vec(),
+        });
+
+        // In batches of 100
+        if new_images.len() > 100 {
+            info!("Saving batch at {}-{}", name_dbg, frame_number);
+            db.run(move |c| {
+                insert_into(images::images)
+                    .values(new_images)
+                    .execute(c)
+            }).await?;
+            new_images = Vec::new();
+        }
+
+        frame_number += 1;
+    }
+
+    db.run(move |c| {
+        update(experiments::experiments.filter(experiments::id.eq(experiment_id)))
+            .set(experiments::num_video_frames.eq(frame_number))
+            .execute(c)
+    }).await?;
 
     Ok(())
 }
