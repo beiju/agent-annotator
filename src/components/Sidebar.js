@@ -51,14 +51,14 @@ function SidebarAgentPresent({ agent, checked, onChange, flipped, onFlip }) {
             checked={checked}
             onChange={onChange}
         />
-        <Form.Check
+        {!agent.symmetrical && <Form.Check
             className="indented-checkbox"
             type="checkbox"
             id={agent.name + "-flip"}
             label="Flip"
             checked={flipped}
             onChange={onFlip}
-        />
+        />}
     </li>)
 }
 

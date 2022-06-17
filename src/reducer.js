@@ -73,8 +73,7 @@ function stepRetreatDispatch(state) {
 export default function reducer(state, action) {
     switch (action.type) {
         case 'set_state':
-            // If the new state is for the same sample as the old state, don't overwrite. Otherwise, overwrite.
-            return action.state.data === state.data ? state : action.state
+            return action.state
         case 'set_loading_finished':
             return { ...state, loading: false }
         case 'set_active_agent':

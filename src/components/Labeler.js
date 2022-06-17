@@ -4,6 +4,7 @@ import { Sidebar } from "./Sidebar"
 import { VideoLabeler } from "./VideoLabeler"
 import reducer from "../reducer"
 import { LabelsDispatch } from "./labels"
+import { apiBaseUrl } from "./util"
 
 const defaultState = {
     loading: true,
@@ -27,7 +28,7 @@ export default function Labeler() {
     useEffect(() => {
         const controller = new AbortController()
         const signal = controller.signal
-        fetch(`//127.0.0.1:8011/api/experiment?id=${experimentId}`, { signal })
+        fetch(`${apiBaseUrl}/api/experiment?id=${experimentId}`, { signal })
           .then(response => response.json())
           .then(sample => {
               if (signal.aborted) {
@@ -115,7 +116,7 @@ export default function Labeler() {
     const hasSample = !!sample
     useEffect(() => {
         if (!hasSample) return
-        fetch(`//127.0.0.1:8011/api/set_label?id=${experimentId}`, {
+        fetch(`${apiBaseUrl}/api/set_label?id=${experimentId}`, {
             method: "POST",
             credentials: "include",
             headers: {
@@ -131,7 +132,7 @@ export default function Labeler() {
     }, [hasSample, state.activeFrame, experimentId])
 
     function returnToIndex() {
-        window.location = "//127.0.0.1:8011/"
+        window.location = `${apiBaseUrl}/`
     }
 
     if (!sample) return (<p>Loading&hellip;</p>)
