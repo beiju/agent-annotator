@@ -66,17 +66,28 @@ pub fn get_project(conn: &PgConnection, project_id: i32) -> QueryResult<Option<P
         .get_result(conn).optional()
 }
 
-pub fn get_experiments_for_project(conn: &PgConnection, project_id: i32) -> QueryResult<Option<(Project, Vec<Experiment>)>> {
+pub fn experiments_for_project(conn: &PgConnection, project_id: i32) -> QueryResult<Vec<(Experiment, Option<User>)>> {
     use crate::schema::experiments::dsl as experiments_dsl;
+    use crate::schema::users::dsl as users_dsl;
+    experiments_dsl::experiments
+        .filter(experiments_dsl::project_id.eq(project_id))
+        .get_results(conn)?
+        .into_iter()
+        .map(|experiment: Experiment| match users_dsl::users
+            .filter(users_dsl::id.eq(experiment.id))
+            .get_result(conn)
+            .optional() {
+            Ok(user) => Ok((experiment, user)),
+            Err(e) => Err(e)
+        })
+        .collect()
+}
+
+pub fn get_experiments_for_project(conn: &PgConnection, project_id: i32) -> QueryResult<Option<(Project, Vec<(Experiment, Option<User>)>)>> {
     get_project(conn, project_id)
         .and_then(|maybe_project| {
             maybe_project
-                .map(|project| {
-                    experiments_dsl::experiments
-                        .filter(experiments_dsl::project_id.eq(project_id))
-                        .get_results(conn)
-                        .map(|experiments| (project, experiments))
-                })
+                .map(|proj| experiments_for_project(conn, project_id).map(|e| (proj, e)))
                 .transpose()
         })
 }

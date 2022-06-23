@@ -214,12 +214,14 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, config: &State<Ann
         num_video_frames: i32,
         num_annotated_frames: usize,
         claimed_by: Option<i32>,
+        claimed_by_name: Option<String>,
         claim_uri: rocket::http::uri::Origin<'a>,
         release_uri: rocket::http::uri::Origin<'a>,
     }
 
-    impl From<experiments::Experiment> for ExperimentContext<'_> {
-        fn from(e: experiments::Experiment) -> Self {
+    impl From<(experiments::Experiment, Option<experiments::User>)> for ExperimentContext<'_> {
+        fn from(data: (experiments::Experiment, Option<experiments::User>)) -> Self {
+            let (e, u) = data;
             Self {
                 id: e.id,
                 folder_name: e.folder_name,
@@ -233,6 +235,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, config: &State<Ann
                             .len()))
                     .unwrap_or(0),
                 claimed_by: e.claimed_by,
+                claimed_by_name: u.map(|u| u.email),
                 claim_uri: uri!(claim(e.id)),
                 release_uri: uri!(release(e.id)),
             }

@@ -8,32 +8,42 @@
             <h2>Experiments</h2>
             {% if refresh_uri %}
             <form action="{{ refresh_uri }}" method="post">
-                <input class="btn" type="submit" value="Refresh experiments list" />
+                <input class="btn btn-outline-primary" type="submit" value="Refresh experiments list" />
             </form>
             {% endif %}
 
             {% if experiments %}
-            <ul>
+            <table class="table">
+                <tr>
+                    <th>Experiment</th>
+                    <th>Asignee</th>
+                    <th>Progress</th>
+                    <th></th>
+                </tr>
                 {% for experiment in experiments %}
-                    <li>
-                        {{experiment.folder_name}}: {{experiment.num_annotated_frames}}/{{experiment.num_video_frames}} frames
-                        {% if experiment.claimed_by == user_id %}
-                            <a href="{{labeler_base_uri}}{{experiment.id}}" class="btn btn-outline-primary">Resume Annotating</a>
-                            <form action="{{experiment.release_uri}}" method="post">
-                                <input class="btn btn-outline-danger" type="submit" value="Un-assign Me" />
-                            </form>
-                        {% elif experiment.claimed_by %}
-                            <form action="{{experiment.release_uri}}" method="post">
-                                <input class="btn btn-outline-danger" type="submit" value="Force Un-assign" />
-                            </form>
-                        {% else %}
-                            <form action="{{experiment.claim_uri}}" method="post">
-                                <input class="btn btn-outline-primary" type="submit" value="Start Annotating" />
-                            </form>
-                        {% endif %}
-                    </li>
+                    <tr>
+                        <td>{{experiment.folder_name}}</td>
+                        <td>{{experiment.claimed_by_name}}</td>
+                        <td>{{experiment.num_annotated_frames}}/{{experiment.num_video_frames}} frames</td>
+                        <td>
+                            {% if experiment.claimed_by == user_id %}
+                                <a href="{{labeler_base_uri}}{{experiment.id}}" class="btn btn-outline-primary">Resume Annotating</a>
+                                <form class="d-inline" action="{{experiment.release_uri}}" method="post">
+                                    <input class="btn btn-outline-danger" type="submit" value="Un-assign Me" />
+                                </form>
+                                {% elif experiment.claimed_by %}
+                                <form class="d-inline" action="{{experiment.release_uri}}" method="post">
+                                    <input class="btn btn-outline-danger" type="submit" value="Force Un-assign" />
+                                </form>
+                            {% else %}
+                                <form class="d-inline" action="{{experiment.claim_uri}}" method="post">
+                                    <input class="btn btn-outline-primary" type="submit" value="Start Annotating" />
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
                 {% endfor %}
-            </ul>
+            </table>
             {% else %}
             <p>No experiments registered yet</p>
             {% endif %}
