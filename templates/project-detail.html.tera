@@ -31,7 +31,7 @@
                                 <form class="d-inline" action="{{experiment.release_uri}}" method="post">
                                     <input class="btn btn-outline-danger" type="submit" value="Un-assign Me" />
                                 </form>
-                                {% elif experiment.claimed_by %}
+                            {% elif experiment.claimed_by %}
                                 <form class="d-inline" action="{{experiment.release_uri}}" method="post">
                                     <input class="btn btn-outline-danger" type="submit" value="Force Un-assign" />
                                 </form>
@@ -39,6 +39,11 @@
                                 <form class="d-inline" action="{{experiment.claim_uri}}" method="post">
                                     <input class="btn btn-outline-primary" type="submit" value="Start Annotating" />
                                 </form>
+                            {% endif %}
+                            {% if experiment.annotate_uri %}
+                                <a href="{{ experiment.annotate_uri }}" class="btn btn-outline-primary">
+                                    Preview
+                                </a>
                             {% endif %}
                         </td>
                     </tr>

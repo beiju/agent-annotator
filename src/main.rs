@@ -206,7 +206,7 @@ fn logout(auth: Auth<'_>) -> Result<Redirect, rocket_auth::Error> {
 }
 
 #[get("/projects/<project_id>")]
-async fn project_detail(db: AnnotatorDbConn, project_id: i32, config: &State<AnnotatorConfig>, user: User) -> WebResult<Template> {
+async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> WebResult<Template> {
     #[derive(Serialize)]
     struct ExperimentContext<'a> {
         id: i32,
@@ -217,30 +217,33 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, config: &State<Ann
         claimed_by_name: Option<String>,
         claim_uri: rocket::http::uri::Origin<'a>,
         release_uri: rocket::http::uri::Origin<'a>,
+        annotate_uri: Option<String>,
     }
 
-    impl From<(experiments::Experiment, Option<experiments::User>)> for ExperimentContext<'_> {
-        fn from(data: (experiments::Experiment, Option<experiments::User>)) -> Self {
-            let (e, u) = data;
-            Self {
-                id: e.id,
-                folder_name: e.folder_name,
-                num_video_frames: e.num_video_frames,
-                num_annotated_frames: e.label
-                    .and_then(|data| data.as_object()
-                        .expect("Label was not an object")
-                        .get("frames")
-                        .map(|frames| frames.as_object()
-                            .expect("Label.frames existed but was not an object")
-                            .len()))
-                    .unwrap_or(0),
-                claimed_by: e.claimed_by,
-                claimed_by_name: u.map(|u| u.email),
-                claim_uri: uri!(claim(e.id)),
-                release_uri: uri!(release(e.id)),
+    let experiment_context = |(e, u): (experiments::Experiment, Option<experiments::User>)| {
+        ExperimentContext {
+            id: e.id,
+            folder_name: e.folder_name,
+            num_video_frames: e.num_video_frames,
+            num_annotated_frames: e.label
+                .and_then(|data| data.as_object()
+                    .expect("Label was not an object")
+                    .get("frames")
+                    .map(|frames| frames.as_object()
+                        .expect("Label.frames existed but was not an object")
+                        .len()))
+                .unwrap_or(0),
+            claimed_by: e.claimed_by,
+            claimed_by_name: u.map(|u| u.email),
+            claim_uri: uri!(claim(e.id)),
+            release_uri: uri!(release(e.id)),
+            annotate_uri: if user.is_admin {
+                Some(labeler_url(e.id))
+            } else {
+                None
             }
         }
-    }
+    };
 
     #[derive(Serialize)]
     struct UserContext {
@@ -292,12 +295,8 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, config: &State<Ann
         Ok(Template::render("project-detail", ExperimentListContext {
             user_id: user.id(),
             project_name: &project.name,
-            experiments: experiments.into_iter().map(|e| e.into()).collect(),
-            labeler_base_uri: if config.use_react_dev_server {
-                "//127.0.0.1:3000/annotator?experiment_id="
-            } else {
-                "/annotator?experiment_id="
-            },
+            experiments: experiments.into_iter().map(experiment_context).collect(),
+            labeler_base_uri: "/annotator?experiment_id=",
             refresh_uri: if user.is_admin { Some(uri!(list_refresh(project_id))) } else { None },
             members: members.into_iter().map(|e| e.into()).collect(),
             potential_members: potential_members.into_iter().map(|e| e.into()).collect(),
@@ -396,7 +395,7 @@ async fn leaderboard(db: AnnotatorDbConn, _user: AdminUser) -> WebResult<Templat
 }
 
 fn labeler_url(experiment_id: i32) -> String {
-    format!("//127.0.0.1:3000/annotator?experiment_id={}", experiment_id)
+    format!("/annotator?experiment_id={}", experiment_id)
 }
 
 

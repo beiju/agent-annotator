@@ -6,6 +6,7 @@ use serde::Serialize;
 use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult};
 use diesel::dsl::exists;
 use diesel::prelude::*;
+use itertools::Itertools;
 use opencv::prelude::*;
 use opencv::videoio;
 use rocket::futures::StreamExt;
@@ -67,6 +68,18 @@ pub fn get_project(conn: &PgConnection, project_id: i32) -> QueryResult<Option<P
         .get_result(conn).optional()
 }
 
+fn experiment_fix_frame_count(conn: &PgConnection, mut experiment: Experiment) -> QueryResult<Experiment> {
+    use crate::schema::images::dsl as images_dsl;
+    images_dsl::images
+        .count()
+        .filter(images_dsl::experiment_id.eq(experiment.id))
+        .get_result(conn)
+        .map(|num_frames: i64| {
+            experiment.num_video_frames = num_frames as i32;
+            experiment
+        })
+}
+
 pub fn experiments_for_project(conn: &PgConnection, project_id: i32) -> QueryResult<Vec<(Experiment, Option<User>)>> {
     use crate::schema::experiments::dsl as experiments_dsl;
     use crate::schema::users::dsl as users_dsl;
@@ -74,13 +87,15 @@ pub fn experiments_for_project(conn: &PgConnection, project_id: i32) -> QueryRes
         .filter(experiments_dsl::project_id.eq(project_id))
         .get_results(conn)?
         .into_iter()
-        .map(|experiment: Experiment| match users_dsl::users
+        .map(|experiment| experiment_fix_frame_count(conn, experiment))
+        .map_ok(|experiment| match users_dsl::users
             .filter(users_dsl::id.eq(experiment.id))
             .get_result(conn)
             .optional() {
             Ok(user) => Ok((experiment, user)),
             Err(e) => Err(e)
         })
+        .flatten()
         .collect()
 }
 
@@ -141,6 +156,7 @@ pub fn get_experiment(conn: &PgConnection, experiment_id: i32) -> QueryResult<Ex
 
     experiments.find(experiment_id)
         .get_result::<Experiment>(conn)
+        .and_then(|experiment| experiment_fix_frame_count(conn, experiment))
 }
 
 pub async fn run_discovery(db: &AnnotatorDbConn, parent_path: &str, project_folder: &str, project_id_: i32) -> WebResult<()> {
