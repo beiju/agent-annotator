@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 use chrono::{DateTime, Utc};
 
@@ -288,4 +289,43 @@ pub fn set_label(conn: &PgConnection, user_id: i32, experiment_id: i32, label: s
         .set(dsl::label.eq(label))
         .execute(conn)
         .map(|_| ())
+}
+
+pub fn annotator_leaderboard(conn: &PgConnection) -> QueryResult<Vec<(User, usize)>> {
+    use crate::schema::users::dsl as users_dsl;
+    use crate::schema::experiments::dsl as experiments_dsl;
+
+    experiments_dsl::experiments
+        .select((experiments_dsl::claimed_by, experiments_dsl::label))
+        .filter(experiments_dsl::claimed_by.is_not_null())
+        .get_results::<(Option<i32>, Option<serde_json::Value>)>(conn)?
+        .into_iter()
+        .fold(HashMap::new(), |mut acc, (user_id, label)| {
+            if let Some(user_id) = user_id {
+                let label_count = label
+                    .and_then(|label| {
+                        label.as_object()
+                            .expect("Label must be a JSON object")
+                            .get("frames")
+                            .map(|frames| {
+                                frames.as_object()
+                                    .expect("Frames must be a JSON object")
+                                    .len()
+                            })
+                    });
+
+                if let Some(count) = label_count {
+                    *acc.entry(user_id).or_insert(0) += count;
+                }
+            }
+            acc
+        })
+        .into_iter()
+        .map(|(user_id, num_labels)| {
+            users_dsl::users
+                .filter(users_dsl::id.eq(user_id))
+                .get_result(conn)
+                .map(|user: User| (user, num_labels))
+        })
+        .collect()
 }

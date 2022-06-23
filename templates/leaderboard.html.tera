@@ -1,0 +1,22 @@
+{% extends "base" %}
+{% block title %}Experiments{% endblock title %}
+{% block body %}
+    <div class="container mt-5">
+        <div class="row">
+            <h1>Leaderboard</h1>
+
+            <table class="table">
+                <tr>
+                    <th>User</th>
+                    <th>Frames</th>
+                </tr>
+                {% for entry in entries %}
+                    <tr>
+                        <td>{{entry.user_name}}</td>
+                        <td>{{entry.num_frames}}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+{% endblock body %}

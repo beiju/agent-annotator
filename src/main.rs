@@ -366,6 +366,35 @@ async fn annotate(_user: User, config: &State<AnnotatorConfig>, experiment_id: i
     }
 }
 
+#[get("/leaderboard")]
+async fn leaderboard(db: AnnotatorDbConn, _user: AdminUser) -> WebResult<Template> {
+    #[derive(Serialize)]
+    struct LeaderboardContext {
+        entries: Vec<LeaderboardEntry>
+    }
+
+    #[derive(Serialize)]
+    struct LeaderboardEntry {
+        user_name: String,
+        num_frames: usize,
+    }
+
+    let mut entries = db.run(move |c| {
+        experiments::annotator_leaderboard(c)
+    }).await?;
+
+    entries.sort_by_key(|(_, num_frames)| std::cmp::Reverse(*num_frames));
+
+    Ok(Template::render("leaderboard", LeaderboardContext {
+        entries: entries.into_iter()
+            .map(|(user, num_frames)| LeaderboardEntry {
+                user_name: user.email,
+                num_frames,
+            })
+            .collect(),
+    }))
+}
+
 fn labeler_url(experiment_id: i32) -> String {
     format!("//127.0.0.1:3000/annotator?experiment_id={}", experiment_id)
 }
@@ -377,7 +406,10 @@ embed_migrations!();
 #[allow(unused_must_use)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rocket::build()
-        .mount("/", routes![index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate, new_project, new_project_post, project_detail, add_member])
+        .mount("/", routes![
+            index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate,
+            new_project, new_project_post, project_detail, add_member, leaderboard
+        ])
         .mount("/public", FileServer::from("public"))
         .mount("/annotator", FileServer::from("public/annotator"))
         .mount("/api", api::routes())
