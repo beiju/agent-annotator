@@ -12,7 +12,14 @@ extern crate diesel_migrations;
 
 use std::fmt::Debug;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+use ac_ffmpeg::codec::Encoder;
+use ac_ffmpeg::codec::video::{self, VideoEncoder, VideoFrameMut};
+use ac_ffmpeg::format::muxer::{Muxer, OutputFormat};
+use ac_ffmpeg::time::TimeBase;
+use ac_ffmpeg::format::io as ac_ffmpeg_io;
 use itertools::Itertools;
+use opencv::{imgcodecs, imgproc};
 use rocket::{
     request::FlashMessage,
     http::Status,
@@ -24,7 +31,9 @@ use rocket::{
     response,
     response::{Flash, Redirect},
 };
+use rocket::futures::{stream, StreamExt, TryStreamExt};
 use rocket::http::Method;
+use rocket::response::stream::ByteStream;
 use rocket_auth::{AdminUser, Auth, Login, Signup, User, Users};
 use rocket_cors::{AllowedHeaders, AllowedOrigins};
 use rocket_dyn_templates::Template;
@@ -48,6 +57,12 @@ pub enum WebError {
 
     #[error(transparent)]
     Join(#[from] rocket::tokio::task::JoinError),
+
+    #[error(transparent)]
+    Openh264(#[from] openh264::Error),
+
+    #[error(transparent)]
+    AcFfmpeg(#[from] ac_ffmpeg::Error),
 
     #[error("Non-unicode path")]
     NonUnicodePath,
@@ -217,7 +232,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
         claimed_by_name: Option<String>,
         claim_uri: rocket::http::uri::Origin<'a>,
         release_uri: rocket::http::uri::Origin<'a>,
-        annotate_uri: Option<String>,
+        preview_uri: rocket::http::uri::Origin<'a>,
     }
 
     let experiment_context = |(e, u): (experiments::Experiment, Option<experiments::User>)| {
@@ -237,11 +252,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
             claimed_by_name: u.map(|u| u.email),
             claim_uri: uri!(claim(e.id)),
             release_uri: uri!(release(e.id)),
-            annotate_uri: if user.is_admin {
-                Some(labeler_url(e.id))
-            } else {
-                None
-            }
+            preview_uri: uri!(experiment_preview(e.id)),
         }
     };
 
@@ -365,11 +376,133 @@ async fn annotate(_user: User, config: &State<AnnotatorConfig>, experiment_id: i
     }
 }
 
+#[get("/experiments/<experiment_id>/preview")]
+async fn experiment_preview(db: AnnotatorDbConn, _user: AdminUser, experiment_id: i32) -> WebResult<Template> {
+    #[derive(Serialize)]
+    struct PreviewEntry<'a> {
+        experiment_name: &'a str,
+        video_uri: rocket::http::uri::Origin<'a>,
+    }
+
+    let experiment = db.run(move |c| {
+        experiments::get_experiment(c, experiment_id)
+    }).await?;
+
+    Ok(Template::render("preview", PreviewEntry {
+        experiment_name: &experiment.folder_name,
+        video_uri: uri!(experiment_preview_video(experiment.id, format!("{}.mp4", experiment.folder_name))),
+    }))
+}
+
+#[get("/experiments/<experiment_id>/preview/<_video_filename>")]
+async fn experiment_preview_video(db: AnnotatorDbConn, _user: AdminUser, experiment_id: i32, _video_filename: &str) -> WebResult<response::content::Custom<ByteStream![Vec<u8>]>> {
+    use opencv::prelude::*;
+
+    let experiment = db.run(move |c| {
+        experiments::get_experiment(c, experiment_id)
+    }).await?;
+
+    let db = Arc::new(db);
+    let encoder = Arc::new(Mutex::new(None));
+    let encoder2 = encoder.clone();
+    let output_stream = stream::iter((0..experiment.num_video_frames).into_iter())
+        // Note that `map` makes this a stream of possibly-concurrent futures, as opposed to `then`
+        // which awaits each future before executing the next iteration
+        .map(move |frame_num| {
+            let db = db.clone();
+            async move {
+                let frame: Vec<u8> = db.run(move |c| {
+                    experiments::get_frame(c, experiment_id, frame_num)
+                }).await?;
+
+                let frame = opencv::types::VectorOfu8::from_iter(frame);
+                let frame = imgcodecs::imdecode(&frame, imgcodecs::IMREAD_COLOR)?;
+                let mut output_frame = Mat::default();
+                imgproc::cvt_color(&frame, &mut output_frame, imgproc::COLOR_BGR2YUV_IYUV, 0)?;
+
+                Ok::<_, WebError>((frame_num, output_frame))
+            }
+        })
+        .buffered(5)
+        // The only reason this block is async is to conform to the API of and_then. As far as I can
+        // tell, there's no and_then that doesn't expect a future.
+        .and_then(move |(frame_num, frame)| {
+            let encoder = encoder.clone();
+            async move {
+                let mut encoder = encoder.lock().unwrap();
+                let pixel_format = video::frame::get_pixel_format("yuv420p");
+                let time_base = TimeBase::new(1, 60);
+                let size = frame.size()?;
+
+                // Initialize encoder if not yet initialized
+                let (enc, mux) = match encoder.as_mut() {
+                    Some(enc) => enc,
+                    None => {
+                        let e = VideoEncoder::builder("libx264")?
+                            .height(size.height as _)
+                            .width(size.width as _)
+                            .pixel_format(pixel_format)
+                            .time_base(time_base) // TODO Get from file data
+                            .build()?;
+                        let io = ac_ffmpeg_io::IO::from_write_stream(ac_ffmpeg_io::MemWriter::default());
+                        let mut muxer_builder = Muxer::builder();
+                        muxer_builder.add_stream(&e.codec_parameters().into())?;
+                        // ismv is like mp4 but doesn't require seekable output
+                        let muxer = muxer_builder.build(io, OutputFormat::find_by_name("ismv").unwrap())?;
+                        encoder.get_or_insert((e, muxer))
+                    }
+                };
+
+                let frame_timestamp = ac_ffmpeg::time::Timestamp::new(frame_num as _, time_base);
+                let output_frame = VideoFrameMut::black(pixel_format, size.width as _, size.height as _)
+                    .with_time_base(time_base)
+                    .with_pts(frame_timestamp);
+
+                enc.push(output_frame.freeze())?;
+                while let Some(packet) = enc.take()? {
+                    mux.push(packet.with_stream_index(0))?;
+                }
+
+
+                let bytes = mux.io_mut().stream_mut().take_data();
+                info!("Writing {} bytes", bytes.len());
+                Ok::<_, WebError>(bytes)
+            }
+        })
+        .chain(stream::once(async move {
+            let mut encoder = encoder2.lock().unwrap();
+            if let Some((enc, mux)) = encoder.as_mut() {
+                enc.flush()?;
+
+                while let Some(packet) = enc.take()? {
+                    mux.push(packet.with_stream_index(0))?;
+                }
+
+                mux.flush()?;
+
+                Ok::<_, WebError>(mux.io_mut().stream_mut().take_data())
+            } else {
+                Ok::<_, WebError>(Vec::new())
+            }
+        }))
+        .scan((), |_, result| async move {
+            match result {
+                Ok(v) => Some(v),
+                Err(err) => {
+                    error!("Error generating output: {}", err);
+                    None
+                }
+            }
+        });
+
+    Ok(response::content::Custom(rocket::http::ContentType::MP4, ByteStream::from(output_stream)))
+}
+
 #[get("/leaderboard")]
 async fn leaderboard(db: AnnotatorDbConn, _user: AdminUser) -> WebResult<Template> {
     #[derive(Serialize)]
     struct LeaderboardContext {
-        entries: Vec<LeaderboardEntry>
+        entries: Vec<LeaderboardEntry>,
     }
 
     #[derive(Serialize)]
@@ -407,7 +540,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rocket::build()
         .mount("/", routes![
             index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate,
-            new_project, new_project_post, project_detail, add_member, leaderboard
+            new_project, new_project_post, project_detail, add_member, leaderboard,
+            experiment_preview, experiment_preview_video
         ])
         .mount("/public", FileServer::from("public"))
         .mount("/annotator", FileServer::from("public/annotator"))

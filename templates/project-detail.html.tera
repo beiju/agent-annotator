@@ -40,8 +40,8 @@
                                     <input class="btn btn-outline-primary" type="submit" value="Start Annotating" />
                                 </form>
                             {% endif %}
-                            {% if experiment.annotate_uri %}
-                                <a href="{{ experiment.annotate_uri }}" class="btn btn-outline-primary">
+                            {% if experiment.preview_uri %}
+                                <a href="{{ experiment.preview_uri }}" class="btn btn-outline-primary">
                                     Preview
                                 </a>
                             {% endif %}

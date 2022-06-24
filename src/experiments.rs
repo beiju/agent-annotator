@@ -159,6 +159,16 @@ pub fn get_experiment(conn: &PgConnection, experiment_id: i32) -> QueryResult<Ex
         .and_then(|experiment| experiment_fix_frame_count(conn, experiment))
 }
 
+pub fn get_frame(conn: &PgConnection, experiment_id: i32, frame_number: i32) -> QueryResult<Vec<u8>> {
+    use crate::schema::images::dsl as images_dsl;
+
+    images_dsl::images
+        .filter(images_dsl::experiment_id.eq(experiment_id))
+        .filter(images_dsl::frame_number.eq(frame_number))
+        .select(images_dsl::data)
+        .get_result::<Vec<u8>>(conn)
+}
+
 pub async fn run_discovery(db: &AnnotatorDbConn, parent_path: &str, project_folder: &str, project_id_: i32) -> WebResult<()> {
     let data_path = Path::new(parent_path).join(project_folder);
 
