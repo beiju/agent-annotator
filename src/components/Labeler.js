@@ -6,7 +6,9 @@ import reducer from "../reducer"
 import { LabelsDispatch } from "./labels"
 import { apiBaseUrl } from "./util"
 
+// note only keys listed in save_state below are persisted to the server
 const defaultState = {
+    settings: null,
     loading: true,
     activeFrame: 1,
     activeAgent: null,
@@ -37,13 +39,12 @@ export default function Labeler() {
               }
               setSample(sample)
 
-              if (sample.label) {
-                  console.log("Restoring ", sample.label)
-                  dispatch({ type: 'set_state', state: sample.label })
-              } else {
-                  console.log("New sample")
-                  dispatch({ type: 'set_state', state: defaultState })
-              }
+              const state = { ...defaultState, ...sample.label  }
+              // Have to do this weird inversion of object structure to get settings into redux
+              delete sample.label
+              state.settings = sample
+
+              dispatch({ type: 'set_state', state })
           })
           .catch(err => {
               // AbortError is for intentional aborts using AbortController, so no handling is needed
@@ -115,7 +116,11 @@ export default function Labeler() {
     // Save on every frame change
     const hasSample = !!sample
     useEffect(() => {
-        if (!hasSample) return
+        if (!hasSample || !state.settings) return
+        const save_state = Object.fromEntries(
+          ["activeFrame", "activeAgent", "agentPresent", "frames"]
+            .map(key => [key, state[key]])
+        )
         fetch(`${apiBaseUrl}/api/set_label?id=${experimentId}`, {
             method: "POST",
             credentials: "include",
@@ -123,7 +128,7 @@ export default function Labeler() {
                 'Content-Type': 'application/json'
                 // 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: JSON.stringify(state)
+            body: JSON.stringify(save_state)
         })
           .catch(err => {
               alert(`Failed to save changes: ${err}`)

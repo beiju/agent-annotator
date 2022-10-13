@@ -29,7 +29,7 @@ export function Toolbar({ sample, state, returnToIndex }) {
                     ><AiFillStepBackward /></Button>
                     <Button
                         onClick={() => dispatch({ type: 'next_frame' })}
-                        disabled={state.activeFrame >= sample.numFrames}
+                        disabled={state.activeFrame + sample.sampleRate > sample.numFrames}
                     ><AiFillStepForward /></Button>
                 </ButtonGroup>
             </Nav>

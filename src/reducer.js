@@ -70,7 +70,25 @@ function stepRetreatDispatch(state) {
     return { type: 'retreat_frame_and_set_agent', activeAgent: presentAgentNames[0] }
 }
 
+function clampFrame(settings, frameNum) {
+    // convert to 0-indexed for math
+    frameNum -= 1
+    // clamp to existing frames
+    frameNum = Math.max(0, Math.min(frameNum, settings.numFrames - 1))
+    // round to the sample rate
+    frameNum = Math.round(frameNum / settings.sampleRate) * settings.sampleRate
+    // convert back to 1-indexed
+    frameNum += 1
+    return frameNum
+}
+
 export default function reducer(state, action) {
+    // The only action that can be performed before initial state is received is to receive the initial state
+    if (!state.settings && action.type !== 'set_state') {
+        console.warn("Received", action.type, "action before initial state from server")
+        return state
+    }
+
     switch (action.type) {
         case 'set_state':
             return action.state
@@ -104,26 +122,28 @@ export default function reducer(state, action) {
             return reducer(state, { type: 'move_agent', agentName: state.activeAgent, x: action.x, y: action.y })
         case 'next_frame':
             if (state.loading) return state
+            const prevActiveFrame = state.activeFrame
+            const activeFrame = clampFrame(state.settings, state.activeFrame + state.settings.sampleRate)
             return {
                 ...state,
                 loading: true,
-                activeFrame: state.activeFrame + 1,
+                activeFrame,
                 frames: {
                     ...state.frames,
-                    [state.activeFrame + 1]: state.frames[state.activeFrame + 1] ?? state.frames[state.activeFrame],
+                    [activeFrame]: state.frames[activeFrame] ?? state.frames[prevActiveFrame],
                 }
             }
         case 'previous_frame':
             return {
                 ...state,
                 loading: true,
-                activeFrame: state.activeFrame > 1 ? state.activeFrame - 1 : state.activeFrame
+                activeFrame: clampFrame(state.settings, state.activeFrame - state.settings.sampleRate)
             }
         case 'jump_to_frame':
             return {
                 ...state,
                 loading: true,
-                activeFrame: action.frame
+                activeFrame: clampFrame(state.settings, action.frame)
             }
         case 'set_agent_is_blurred':
             return updateFrame(state, action.agentName, { isBlurred: action.isBlurred })
