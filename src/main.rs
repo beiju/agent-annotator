@@ -10,6 +10,7 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -30,6 +31,7 @@ use rocket::{
     State,
     response,
     response::{Flash, Redirect},
+    FromForm,
 };
 use rocket::futures::{stream, StreamExt, TryStreamExt};
 use rocket::http::Method;
@@ -40,6 +42,7 @@ use rocket_dyn_templates::Template;
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
+use crate::experiments::UpdateExperimentSettings;
 
 #[rocket_sync_db_pools::database("annotator")]
 pub struct AnnotatorDbConn(diesel::PgConnection);
@@ -231,7 +234,8 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
         folder_name: String,
         num_video_frames: i32,
         num_annotated_frames: usize,
-        video_frame_rate: Option<f64>,
+        video_frame_rate: Option<String>,
+        annotation_frame_rate: Option<f64>,
         claimed_by: Option<i32>,
         claimed_by_name: Option<String>,
         claim_uri: rocket::http::uri::Origin<'a>,
@@ -244,7 +248,8 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
             id: e.id,
             folder_name: e.folder_name,
             num_video_frames: e.num_video_frames,
-            video_frame_rate: e.video_frame_rate,
+            video_frame_rate: e.video_frame_rate.map(|val| format!("{:.2}", val)),
+            annotation_frame_rate: e.annotation_frame_rate,
             num_annotated_frames: e.label
                 .and_then(|data| data.as_object()
                     .expect("Label was not an object")
@@ -287,6 +292,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
         members: Vec<UserContext>,
         potential_members: Vec<UserContext>,
         add_member_uri: Option<rocket::http::uri::Origin<'a>>,
+        save_uri: Option<rocket::http::uri::Origin<'a>>,
     }
 
     if let Some((project, experiments)) = db.run(move |c| {
@@ -314,6 +320,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
             experiments: experiments.into_iter().map(experiment_context).collect(),
             labeler_base_uri: "/annotator?experiment_id=",
             refresh_uri: if user.is_admin { Some(uri!(list_refresh(project_id))) } else { None },
+            save_uri: if user.is_admin { Some(uri!(list_save(project_id))) } else { None },
             members: members.into_iter().map(|e| e.into()).collect(),
             potential_members: potential_members.into_iter().map(|e| e.into()).collect(),
             add_member_uri: if user.is_admin { Some(uri!(add_member(project_id))) } else { None },
@@ -334,6 +341,28 @@ async fn list_refresh(db: AnnotatorDbConn, project_id: i32, config: &State<Annot
     } else {
         Err(WebError::ProjectNotFound(project_id))
     }
+}
+
+#[derive(FromForm)]
+pub struct ExperimentSettings {
+    annotation_frame_rate: Option<f64>,
+}
+#[derive(FromForm)]
+pub struct SaveForm {
+    settings: HashMap<i32, ExperimentSettings>,
+}
+#[post("/projects/<project_id>/save", data="<form>")]
+async fn list_save(db: AnnotatorDbConn, project_id: i32, form: Form<SaveForm>, _user: AdminUser) -> WebResult<Redirect> {
+    let settings_to_update = form.settings.iter()
+        .map(|(&id, settings)| {
+            (id, UpdateExperimentSettings { annotation_frame_rate: settings.annotation_frame_rate })
+        })
+        .collect();
+    db.run(move |c| {
+        experiments::update_project(c, project_id, settings_to_update)
+    }).await?;
+
+    Ok(Redirect::to(uri!(project_detail(project_id))))
 }
 
 #[derive(FromForm)]
@@ -546,7 +575,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .mount("/", routes![
             index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate,
             new_project, new_project_post, project_detail, add_member, leaderboard,
-            experiment_preview, experiment_preview_video
+            experiment_preview, experiment_preview_video, list_save
         ])
         .mount("/public", FileServer::from("public"))
         .mount("/annotator", FileServer::from("public/annotator"))

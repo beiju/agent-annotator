@@ -3,7 +3,7 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 
 use serde::{Deserialize, Serialize};
-use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult};
+use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult, update};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use itertools::Itertools;
@@ -54,6 +54,13 @@ struct NewExperiment {
     pub folder_name: String,
     pub num_video_frames: i32,
     pub video_frame_rate: Option<f64>,
+    pub annotation_frame_rate: Option<f64>,
+}
+
+#[derive(AsChangeset)]
+#[table_name = "experiments"]
+#[changeset_options(treat_none_as_null = "true")]
+pub struct UpdateExperimentSettings {
     pub annotation_frame_rate: Option<f64>,
 }
 
@@ -318,6 +325,25 @@ async fn insert_experiment(db: &AnnotatorDbConn, new_experiment: NewExperiment, 
             ))
             .execute(c)
     }).await?;
+
+    Ok(())
+}
+
+pub fn update_project(conn: &PgConnection, project_id: i32, updates: HashMap<i32, UpdateExperimentSettings>) -> QueryResult<()> {
+    use diesel::dsl::*;
+    use crate::schema::experiments::dsl as experiments;
+
+    let updates_sent = updates.len();
+    let mut updates_done = 0;
+    for (experiment_id, experiment_update) in updates {
+        // Filters on experiment_id and project_id to make sure one admin can't update another
+        // admin's projects
+        updates_done = update(experiments::experiments
+            .filter(experiments::project_id.eq(project_id).and(experiments::id.eq(experiment_id))))
+            .set(experiment_update)
+            .execute(conn)?;
+    }
+    println!("Performed {updates_done} of {updates_sent} updates");
 
     Ok(())
 }

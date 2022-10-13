@@ -1,6 +1,11 @@
 {% extends "base" %}
 {% block title %}Experiments{% endblock title %}
 {% block body %}
+    <style>
+        /* too lazy to put this in head */
+        .number-input { width: 5em }
+    </style>
+
     <div class="container mt-5">
         <div class="row">
             <h1>{{ project_name }}</h1>
@@ -13,12 +18,14 @@
             {% endif %}
 
             {% if experiments %}
+            <form action="{{ save_uri }}" method="post">
             <table class="table">
                 <tr>
                     <th>Experiment</th>
                     <th>Asignee</th>
                     <th>Progress</th>
                     <th>Video FPS</th>
+                    <th>Annotation FPS</th>
                     <th></th>
                 </tr>
                 {% for experiment in experiments %}
@@ -27,6 +34,15 @@
                         <td>{{experiment.claimed_by_name}}</td>
                         <td>{{experiment.num_annotated_frames}}/{{experiment.num_video_frames}} frames</td>
                         <td>{{experiment.video_frame_rate}}</td>
+                        <td>
+                            {% if save_uri %}
+                                <input type="number" class="number-input"
+                                       name="settings[{{ experiment.id }}].annotation_frame_rate"
+                                       value="{{experiment.annotation_frame_rate}}" />
+                            {% else %}
+                                {{ experiment.annotation_frame_rate }}
+                            {% endif %}
+                        </td>
                         <td>
                             {% if experiment.claimed_by == user_id %}
                                 <a href="{{labeler_base_uri}}{{experiment.id}}" class="btn btn-outline-primary">Resume Annotating</a>
@@ -51,6 +67,10 @@
                     </tr>
                 {% endfor %}
             </table>
+                {% if save_uri %}
+                <input class="btn btn-primary" type="submit" value="Save changes" />
+                {% endif %}
+            </form>
             {% else %}
             <p>No experiments registered yet</p>
             {% endif %}
