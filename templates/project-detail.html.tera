@@ -18,6 +18,7 @@
                     <th>Experiment</th>
                     <th>Asignee</th>
                     <th>Progress</th>
+                    <th>Video FPS</th>
                     <th></th>
                 </tr>
                 {% for experiment in experiments %}
@@ -25,6 +26,7 @@
                         <td>{{experiment.folder_name}}</td>
                         <td>{{experiment.claimed_by_name}}</td>
                         <td>{{experiment.num_annotated_frames}}/{{experiment.num_video_frames}} frames</td>
+                        <td>{{experiment.video_frame_rate}}</td>
                         <td>
                             {% if experiment.claimed_by == user_id %}
                                 <a href="{{labeler_base_uri}}{{experiment.id}}" class="btn btn-outline-primary">Resume Annotating</a>

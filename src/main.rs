@@ -64,6 +64,9 @@ pub enum WebError {
     #[error(transparent)]
     AcFfmpeg(#[from] ac_ffmpeg::Error),
 
+    #[error(transparent)]
+    Csv(#[from] csv::Error),
+
     #[error("Non-unicode path")]
     NonUnicodePath,
 
@@ -228,6 +231,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
         folder_name: String,
         num_video_frames: i32,
         num_annotated_frames: usize,
+        video_frame_rate: Option<f64>,
         claimed_by: Option<i32>,
         claimed_by_name: Option<String>,
         claim_uri: rocket::http::uri::Origin<'a>,
@@ -240,6 +244,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
             id: e.id,
             folder_name: e.folder_name,
             num_video_frames: e.num_video_frames,
+            video_frame_rate: e.video_frame_rate,
             num_annotated_frames: e.label
                 .and_then(|data| data.as_object()
                     .expect("Label was not an object")

@@ -23,3 +23,5 @@ itertools = "0.10.3"
 openh264 = "0.2.13"
 tokio-util = { version = "0.7.3", features = ["rt"] }
 ac-ffmpeg = "0.17.4"
+csv = "1.1.6"
+multimap = "0.8.3"

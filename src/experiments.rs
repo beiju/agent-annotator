@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use chrono::{DateTime, Utc};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult};
 use diesel::dsl::exists;
 use diesel::prelude::*;
@@ -42,6 +42,9 @@ pub struct Experiment {
     pub claimed_at: Option<DateTime<Utc>>,
 
     pub label: Option<serde_json::Value>,
+
+    pub video_frame_rate: Option<f64>,
+    pub annotation_frame_rate: Option<f64>,
 }
 
 #[derive(Insertable, AsChangeset)]
@@ -50,6 +53,8 @@ struct NewExperiment {
     pub project_id: i32,
     pub folder_name: String,
     pub num_video_frames: i32,
+    pub video_frame_rate: Option<f64>,
+    pub annotation_frame_rate: Option<f64>,
 }
 
 #[derive(Insertable)]
@@ -186,6 +191,8 @@ pub async fn run_discovery(db: &AnnotatorDbConn, parent_path: &str, project_fold
                 project_id: project_id_,
                 folder_name: folder_name_str,
                 num_video_frames: 0,
+                video_frame_rate: None,
+                annotation_frame_rate: None,
             };
 
             Ok(Some((new_experiment, file)))
@@ -232,6 +239,44 @@ async fn insert_experiment(db: &AnnotatorDbConn, new_experiment: NewExperiment, 
         Ok::<_, diesel::result::Error>(experiment_id)
     }).await?;
 
+    #[derive(Debug, Deserialize)]
+    struct DataRecord {
+        video_frame_number: i64,
+        video_camera_timestamp: f64,
+    }
+
+    println!("Reading frame rate");
+    let mut data = csv::Reader::from_path(file.path().join("data.csv"))?;
+    let durations = data.deserialize()
+        .map(|row_raw| {
+            let row: DataRecord = row_raw?;
+            Ok((row.video_frame_number, row.video_camera_timestamp))
+        })
+        .collect::<Result<BTreeMap<_, _>, csv::Error>>()? // btreemap has ordered iteration
+        .into_iter()
+        .tuple_windows()
+        .map(|((prev_frame, prev_time), (frame, time))| {
+            (time - prev_time) / (frame - prev_frame) as f64
+        });
+    let mut total_duration = 0.0;
+    let mut n = 0;
+    for duration in durations {
+        total_duration += duration;
+        n += 1;
+    }
+    let frame_rate = (n as f64) / total_duration;
+    // println!("{} frames", frame_timings.len());
+    // let mut histogram = multimap::MultiMap::new();
+    // for  in frame_timings.iter().tuple_windows() {
+    //     let frame_time = ;
+    //     histogram.insert(frame_time as i64, frame_time);
+    // }
+    // println!("{} hist entries", histogram.len());
+    //
+    // for (key, vec) in histogram.iter_all() {
+    //     println!("{key}: {}", vec.len());
+    // }
+
     // turns out decoding video is hell!
     let video_path = file.path().join("camera.avi-0000.avi");
     let video_path_str = video_path.to_str()
@@ -267,7 +312,10 @@ async fn insert_experiment(db: &AnnotatorDbConn, new_experiment: NewExperiment, 
 
     db.run(move |c| {
         update(experiments::experiments.filter(experiments::id.eq(experiment_id)))
-            .set(experiments::num_video_frames.eq(frame_number))
+            .set((
+                experiments::num_video_frames.eq(frame_number),
+                experiments::video_frame_rate.eq(frame_rate),
+            ))
             .execute(c)
     }).await?;
 

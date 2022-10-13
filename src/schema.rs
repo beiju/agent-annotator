@@ -7,6 +7,8 @@ table! {
         claimed_by -> Nullable<Int4>,
         claimed_at -> Nullable<Timestamptz>,
         label -> Nullable<Jsonb>,
+        video_frame_rate -> Nullable<Float8>,
+        annotation_frame_rate -> Nullable<Float8>,
     }
 }
 
