@@ -1,3 +1,29 @@
 .form-check.indented-checkbox {
     padding-left: 3rem;
 }
+
+/* the .form-control is a specificity hack */
+.form-control.agent-color {
+    -webkit-appearance: none;
+    width: 2em;
+    height: 2em;
+    border-radius: 0.5em;
+    display: inline-block;
+    min-height: auto;
+    vertical-align: middle;
+    margin-right: 0.5em;
+    padding: 0.3em;
+}
+
+/* who knows why width and height are controlled by different selectors. this is all nonstandard */
+input[type="color"]::-webkit-color-swatch-wrapper {
+    width: 1.3em;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    height: 1.2em;
+}
+
+.icon-button {
+    padding: 0 0.2em;
+}

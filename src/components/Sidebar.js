@@ -1,64 +1,87 @@
-import { Col, Form, FormCheck } from "react-bootstrap"
+import { Button, Col, Form, FormCheck } from "react-bootstrap"
 
 import agents from "../agents.json"
-import { useContext } from "react"
+import { useContext, useState } from "react"
 import { LabelsDispatch } from "./labels"
+import color_convert from "color-convert"
+import { BsPencilSquare } from "react-icons/bs"
+import { RiDeleteBack2Fill } from "react-icons/ri"
 
 import "./Sidebar.css"
 
 function SidebarAgentsPresent({ state }) {
     const dispatch = useContext(LabelsDispatch)
+    const [agentToAdd, setAgentToAdd] = useState("")
     if (!dispatch) return null
+
+    function addAgent(agentName) {
+      const existing_agent = agents.find(agent => agent.name === agentName)
+      if (existing_agent) {
+        dispatch({
+          type: 'add_agent',
+          agent: {
+            ...existing_agent,
+            color: "#" + color_convert.hsv.hex(Math.random() * 360, 100, 100)
+          }
+        })
+        setAgentToAdd("")
+      }
+    }
 
     return <div>
         <h4 className="text-center mt-3">Agents Present</h4>
         <p className="small text-secondary text-center">Applies to the entire video</p>
 
         <ol className="list-unstyled m-3">
-            {agents.map(agent => (
-                <SidebarAgentPresent
-                    key={agent.name}
+            {state.agents.map((agent, i) => (
+                <SidebarAgent
+                    key={i}
                     agent={agent}
-                    active={agent.name === state.activeAgent}
-                    onActivate={() => dispatch({
-                        type: 'set_active_agent',
-                        activeAgent: agent.name
-                    })}
-                    checked={state.agentPresent?.[agent.name] ?? false}
-                    onChange={event => dispatch({
-                        type: 'set_agent_present',
-                        agent: agent.name,
-                        isPresent: event.currentTarget.checked
-                    })}
-                    flipped={state.agentFlipped?.[agent.name] ?? false}
-                    onFlip={event => dispatch({
-                        type: 'set_agent_flipped',
-                        agent: agent.name,
-                        isFlipped: event.currentTarget.checked
-                    })}
+                    onColorChange={color => dispatch({ type: 'set_agent_color', agent: i, color })}
+                    onClickEdit={_ => null}
+                    onClickDelete={_ => dispatch({ type: 'delete_agent', agent: i })}
                 />
             ))}
         </ol>
+
+      <div className="input-group px-2 pb-3">
+        {/*<Form.Control*/}
+        {/*  type="color"*/}
+        {/*  id="new-agent-color"*/}
+        {/*  defaultValue="#563d7c"*/}
+        {/*  title="Agent color"*/}
+        {/*  style={{ flexGrow: 0, width: "2.5em"}}*/}
+        {/*/>*/}
+        <Form.Select
+          aria-label="Agent Type"
+          value={agentToAdd}
+          onChange={e => setAgentToAdd(e.currentTarget.value)}
+        >
+          <option key={""} value={""}>Agent Type&hellip;</option>
+          {agents.map(agent => (
+            <option key={agent.name} value={agent.name}>
+              {agent.display_name}
+            </option>
+          ))}
+        </Form.Select>
+        <Button variant="primary" onClick={_ => addAgent(agentToAdd)} disabled={!agentToAdd}>Add</Button>
+      </div>
     </div>
 }
 
-function SidebarAgentPresent({ agent, checked, onChange, flipped, onFlip }) {
+function SidebarAgent({ agent, onClickEdit, onClickDelete, onColorChange }) {
     return (<li>
-        <Form.Check
-            type="checkbox"
-            id={agent.name + "-active"}
-            label={agent.display_name}
-            checked={checked}
-            onChange={onChange}
-        />
-        {!agent.symmetrical && <Form.Check
-            className="indented-checkbox"
-            type="checkbox"
-            id={agent.name + "-flip"}
-            label="Flip"
-            checked={flipped}
-            onChange={onFlip}
-        />}
+      <Form.Control
+        type="color"
+        size="sm"
+        className="agent-color"
+        value={agent.color}
+        onChange={e => onColorChange(e.currentTarget.value)}
+        title="Agent color"
+      />
+      {agent.display_name}
+      <Button className="float-end icon-button" size="sm" variant="light" onClick={_ => onClickDelete()}><RiDeleteBack2Fill /></Button>
+      <Button className="float-end icon-button" size="sm" variant="light" onClick={_ => onClickEdit()}><BsPencilSquare /></Button>
     </li>)
 }
 

@@ -199,6 +199,29 @@ export default function reducer(state, action) {
                 }
             }
 
+        case 'add_agent':
+            return {
+                ...state,
+                agents: [
+                  ...state.agents,
+                  action.agent,
+                ]
+            }
+
+        case 'set_agent_color':
+            return {
+                ...state,
+                agents: state.agents.map((agent, i) => i === action.agent ? {
+                    ...agent,
+                    color: action.color,
+                } : agent)
+            }
+
+        case 'delete_agent':
+            let agents = [...state.agents]
+            agents.splice(action.agent, 1)
+            return { ...state, agents }
+
         default:
             throw new Error("Unknown reducer action")
     }
