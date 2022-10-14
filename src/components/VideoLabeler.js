@@ -9,6 +9,7 @@ import { LabelsDispatch } from "./labels"
 import { Timeline } from "./Timeline"
 import { Toolbar } from "./Toolbar"
 import { getSrcForFrame } from "./util"
+import color_convert from "color-convert"
 
 function transform(x, y, angle, flipped) {
     const matrix = new DOMMatrix([
@@ -90,16 +91,16 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
     }, [canvas, dishMaskLocation])
 
 
-    const getAgentLocation = useCallback(function (state, agent) {
+    const getAgentLocation = useCallback(function (state, agentId) {
         if (!canvas) throw new Error("Canvas ref was cleared")
 
-        if (agent === DISH_MASK) {
+        if (agentId === DISH_MASK) {
             return dishMaskLocation
         }
 
-        console.assert(typeof agent === "string")
+        console.assert(typeof agentId === "string")
 
-        const agentLabel = state.frames[state.activeFrame]?.[agent] ?? {}
+        const agentLabel = state.frames[state.activeFrame]?.[agentId] ?? {}
         const x = agentLabel.x ?? canvas.width / 2
         const y = agentLabel.y ?? canvas.height / 2
         const angle = agentLabel.angle ?? 0
@@ -118,18 +119,17 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
 
         ctx.lineWidth = 2
 
-        for (const agent of agents) {
-            if (!state.agentPresent[agent.name]) continue
-
-            if (agent.name === state.activeAgent) {
-                ctx.strokeStyle = 'red'
-                ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'
+        for (const [agentId, agent] of Object.entries(state.agents)) {
+            const [h, s, l] = color_convert.hex.hsl(agent.color.slice(1))
+            if (agentId === state.activeAgent) {
+                ctx.strokeStyle = `hsla(${h}, ${s}%, ${l}%, 1)`
+                ctx.fillStyle = `hsla(${h}, ${s}%, ${l}%, 0.2)`
             } else {
-                ctx.strokeStyle = 'darkgrey'
-                ctx.fillStyle = 'rgba(0,0,0,0.2)'
+                ctx.strokeStyle = `hsla(${h}, ${s * 0.25}%, ${l}%, 1)`
+                ctx.fillStyle = `hsla(${h}, ${s * 0.25}%, ${l}%, 0.2)`
             }
-            const { x, y, angle } = getAgentLocation(state, agent.name)
-            const flipped = state.agentFlipped?.[agent.name]
+            const { x, y, angle } = getAgentLocation(state, agentId)
+            const flipped = false // TODO remove 
 
             ctx.setTransform(transform(x, y, angle, flipped))
             ctx.beginPath()
@@ -150,7 +150,7 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
         ) {
             dispatch({
                 type: 'set_agent_position',
-                agentName: state.activeAgent,
+                agentId: state.activeAgent,
                 x: activeAgentLabel.x ?? image.naturalWidth / 2,
                 y: activeAgentLabel.y ?? image.naturalHeight / 2,
             })
@@ -175,13 +175,13 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
 
     const [drag, setDrag] = useState(null)
 
-    function startDrag(x, y, agentName) {
-        if (!agentName) return
+    function startDrag(x, y, agentId) {
+        if (!agentId) return
 
         setDrag({
-            agentName,
+            agentId,
             mouse: { x, y },
-            agent: getAgentLocation(state, agentName)
+            agent: getAgentLocation(state, agentId)
         })
     }
 
@@ -190,17 +190,15 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
     }
 
     function getHoveredAgent(x, y) {
-        for (const agent of agents) {
-            if (!state.agentPresent[agent.name]) continue
-
-            const agentPos = getAgentLocation(state, agent.name)
+        for (const [agentId, agent] of Object.entries(state.agents)) {
+            const agentPos = getAgentLocation(state, agentId)
             const xTranslated = x - agentPos.x
             const yTranslated = y - agentPos.y
             const xRotated = xTranslated * Math.cos(-agentPos.angle) + yTranslated * Math.sin(-agentPos.angle)
             const yRotated = -xTranslated * Math.sin(-agentPos.angle) + yTranslated * Math.cos(-agentPos.angle)
 
             if (point_in_polygon(agent.shape, [xRotated, yRotated]) <= 0) {
-                return agent.name
+                return agentId
             }
         }
 
@@ -232,7 +230,7 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
     }
 
     function isDragging() {
-        return drag && (drag.agentName === state.activeAgent || drag.agentName === DISH_MASK)
+        return drag && (drag.agentId === state.activeAgent || drag.agentId === DISH_MASK)
     }
 
     function onCanvasMousemove(event) {
@@ -240,7 +238,7 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
             const xDelta = event.nativeEvent.offsetX * (canvas.height / canvas.clientHeight) - drag.mouse.x
             const yDelta = event.nativeEvent.offsetY * (canvas.width / canvas.clientWidth) - drag.mouse.y
 
-            if (drag.agentName === DISH_MASK) {
+            if (drag.agentId === DISH_MASK) {
                 dispatch({
                     type: 'set_dish_mask_position',
                     x: xDelta + drag.agent.x,
@@ -249,7 +247,7 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
             } else {
                 dispatch({
                     type: 'set_agent_position',
-                    agentName: drag.agentName,
+                    agentId: drag.agentId,
                     x: xDelta + drag.agent.x,
                     y: yDelta + drag.agent.y,
                 })
@@ -261,7 +259,7 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
         // If dragging, rotate the agent being dragged. Otherwise, rotate the hovered agent (or dish). Otherwise,
         // scroll the selected agent
 
-        if (isDragging()) return drag.agentName
+        if (isDragging()) return drag.agentId
 
         if (isDishMaskHovered(x, y)) return DISH_MASK
 
@@ -271,25 +269,25 @@ export function VideoLabeler({ sample, state, returnToIndex }) {
     function onCanvasWheel(event) {
         const { x, y } = eventToImageCoordinates(event)
 
-        const agentName = agentToScroll(x, y)
+        const agentId = agentToScroll(x, y)
 
-        if (agentName === DISH_MASK) {
+        if (agentId === DISH_MASK) {
             const { radius } = dishMaskLocation
             dispatch({
                 type: 'set_dish_mask_radius',
                 radius: Math.max(10, radius + event.deltaY / (event.shiftKey ? 10 : 100)),
             })
-        } else if (agentName) {
-            if (agentName !== state.activeAgent) {
+        } else if (agentId) {
+            if (agentId !== state.activeAgent) {
                 dispatch({
                     type: 'set_active_agent',
-                    activeAgent: agentName
+                    activeAgent: agentId
                 })
             }
 
             dispatch({
                 type: 'rotate_agent',
-                agentName,
+                agentId,
                 by: event.deltaY / (event.shiftKey ? 1000 : 10000),
             })
         }

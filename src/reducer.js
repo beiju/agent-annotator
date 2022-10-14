@@ -23,12 +23,14 @@ function normalizeAngle(angle) {
 }
 
 function stepAdvanceDispatch(state) {
-    const presentAgentNames = Object.keys(state.agentPresent).filter(agentName => state.agentPresent[agentName])
+    const presentAgentIds = Object.keys(state.agents).sort()
+
+    const idx = presentAgentIds.indexOf(state.activeAgent)
 
     // First, if there is no active agent, try to activate the first present agent
-    if (!state.activeAgent) {
-        if (presentAgentNames.length > 0) {
-            return { type: 'set_active_agent', activeAgent: presentAgentNames[0] }
+    if (!state.activeAgent || idx < 0) {
+        if (presentAgentIds.length > 0) {
+            return { type: 'set_active_agent', activeAgent: presentAgentIds[0] }
         } else {
             // If there aren't any present agents, just go to the next frame
             return { type: 'next_frame' }
@@ -36,38 +38,36 @@ function stepAdvanceDispatch(state) {
     }
 
     // Try to activate the next present agent
-    const idx = presentAgentNames.indexOf(state.activeAgent)
-    if (idx < 0) {
-        throw new Error("Current agent is not present")
-    } else if (idx + 1 < presentAgentNames.length) {
-        return { type: 'set_active_agent', activeAgent: presentAgentNames[idx + 1] }
+    if (idx + 1 < presentAgentIds.length) {
+        return { type: 'set_active_agent', activeAgent: presentAgentIds[idx + 1] }
     }
 
     // If nothing else worked, advance the frame and reset the agent
-    return { type: 'advance_frame_and_set_agent', activeAgent: presentAgentNames[0] }
+    return { type: 'advance_frame_and_set_agent', activeAgent: presentAgentIds[0] }
 }
 
 function stepRetreatDispatch(state) {
-    const presentAgentNames = Object.keys(state.agentPresent).filter(agentName => state.agentPresent[agentName]).reverse()
+    const presentAgentIds = Object.keys(state.agents).sort().reverse()
+
+    const idx = presentAgentIds.indexOf(state.activeAgent)
 
     // First, if there is no active agent, try to activate the first present agent
-    if (!state.activeAgent) {
-        if (presentAgentNames.length > 0) {
-            return { type: 'set_active_agent', activeAgent: presentAgentNames[0] }
+    if (!state.activeAgent || idx < 0) {
+        if (presentAgentIds.length > 0) {
+            return { type: 'set_active_agent', activeAgent: presentAgentIds[0] }
+        } else {
+            // If there aren't any present agents, just go to the previous frame
+            return { type: 'previous_frame' }
         }
-        throw new Error("Tried to retreat when no agents were active")
     }
 
     // Try to activate the next present agent
-    const idx = presentAgentNames.indexOf(state.activeAgent)
-    if (idx < 0) {
-        throw new Error("Current agent is not present")
-    } else if (idx + 1 < presentAgentNames.length) {
-        return { type: 'set_active_agent', activeAgent: presentAgentNames[idx + 1] }
+    if (idx + 1 < presentAgentIds.length) {
+        return { type: 'set_active_agent', activeAgent: presentAgentIds[idx + 1] }
     }
 
     // If nothing else worked, advance the frame and reset the agent
-    return { type: 'retreat_frame_and_set_agent', activeAgent: presentAgentNames[0] }
+    return { type: 'retreat_frame_and_set_agent', activeAgent: presentAgentIds[0] }
 }
 
 function clampFrame(settings, frameNum) {
@@ -106,20 +106,20 @@ export default function reducer(state, action) {
                 agentPresent: { ...state.agentPresent, [state.activeAgent]: !state.agentPresent[state.activeAgent] },
             }
         case 'set_agent_position':
-            return updateFrame(state, action.agentName, { x: action.x, y: action.y })
+            return updateFrame(state, action.agentId, { x: action.x, y: action.y })
         case 'rotate_agent':
-            return updateFrame(state, action.agentName, agent => ({
+            return updateFrame(state, action.agentId, agent => ({
                 angle: normalizeAngle((agent.angle || 0) + action.by),
             }))
         case 'rotate_active_agent':
-            return reducer(state, { type: 'rotate_agent', agentName: state.activeAgent, by: action.by })
+            return reducer(state, { type: 'rotate_agent', agentId: state.activeAgent, by: action.by })
         case 'move_agent':
-            return updateFrame(state, action.agentName, agent => ({
+            return updateFrame(state, action.agentId, agent => ({
                 x: (agent.x || 0) + (action.x || 0),
                 y: (agent.y || 0) + (action.y || 0),
             }))
         case 'move_active_agent':
-            return reducer(state, { type: 'move_agent', agentName: state.activeAgent, x: action.x, y: action.y })
+            return reducer(state, { type: 'move_agent', agentId: state.activeAgent, x: action.x, y: action.y })
         case 'next_frame':
             if (state.loading) return state
             const prevActiveFrame = state.activeFrame
@@ -146,11 +146,11 @@ export default function reducer(state, action) {
                 activeFrame: clampFrame(state.settings, action.frame),
             }
         case 'set_agent_is_blurred':
-            return updateFrame(state, action.agentName, { isBlurred: action.isBlurred })
+            return updateFrame(state, action.agentId, { isBlurred: action.isBlurred })
         case 'toggle_active_agent_is_blurred':
             return updateFrame(state, state.activeAgent, current => ({ isBlurred: !current.isBlurred }))
         case 'set_agent_is_obscured':
-            return updateFrame(state, action.agentName, { isObscured: action.isObscured })
+            return updateFrame(state, action.agentId, { isObscured: action.isObscured })
         case 'toggle_active_agent_is_obscured':
             return updateFrame(state, state.activeAgent, current => ({ isObscured: !current.isObscured }))
         case 'step_advance':

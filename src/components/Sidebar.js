@@ -70,7 +70,7 @@ function SidebarAgentsPresent({ state }) {
 }
 
 function SidebarAgent({ agent, onClickEdit, onClickDelete, onColorChange }) {
-    return (<li>
+    return (<li className="d-flex align-items-center">
       <Form.Control
         type="color"
         size="sm"
@@ -79,29 +79,29 @@ function SidebarAgent({ agent, onClickEdit, onClickDelete, onColorChange }) {
         onChange={e => onColorChange(e.currentTarget.value)}
         title="Agent color"
       />
-      {agent.display_name}
-      <Button className="float-end icon-button" size="sm" variant="light" onClick={_ => onClickDelete()}><RiDeleteBack2Fill /></Button>
-      <Button className="float-end icon-button" size="sm" variant="light" onClick={_ => onClickEdit()}><BsPencilSquare /></Button>
+      <span className="flex-grow-1">{agent.display_name}</span>
+      <Button className="icon-button" size="sm" variant="light" onClick={_ => onClickDelete()}><RiDeleteBack2Fill /></Button>
+      <Button className="icon-button" size="sm" variant="light" onClick={_ => onClickEdit()}><BsPencilSquare /></Button>
     </li>)
 }
 
-function SidebarAgentAnnotation({ state, agent, label }) {
+function SidebarAgentAnnotation({ state, agentId, agent, label }) {
     const dispatch = useContext(LabelsDispatch)
     if (!dispatch) return null
 
     return <li
-        className={"list-group-item py-2 px-3 " + (state.activeAgent === agent.name ? 'active' : '')}
-        onClick={() => dispatch({ type: 'set_active_agent', activeAgent: agent.name })}
+        className={"list-group-item py-2 px-3 " + (state.activeAgent === agentId ? 'active' : '')}
+        onClick={() => dispatch({ type: 'set_active_agent', activeAgent: agentId })}
     >
         {agent.display_name}
         <Form>
             <FormCheck
-                id={`agent-${agent.name}-blurred`}
+                id={`agent-${agentId}-blurred`}
                 label={"Blurred"}
                 checked={label?.isBlurred ?? false}
                 onChange={event => dispatch({
                     type: 'set_agent_is_blurred',
-                    agentName: agent.name,
+                    agentId,
                     isBlurred: event.currentTarget.checked
                 })}
             />
@@ -111,7 +111,7 @@ function SidebarAgentAnnotation({ state, agent, label }) {
                 checked={label?.isObscured ?? false}
                 onChange={event => dispatch({
                     type: 'set_agent_is_obscured',
-                    agentName: agent.name,
+                    agentId,
                     isObscured: event.currentTarget.checked
                 })}
             />
@@ -125,17 +125,17 @@ function SidebarAgentAnnotations({ state }) {
         <p className="small text-secondary text-center">Applies to the current frame</p>
 
         <ul className="list-group list-group-flush">
-            {agents.map(agent =>
-                state.agentPresent?.[agent.name] &&
+            {Object.entries(state.agents).map(([agentId, agent]) =>
                 <SidebarAgentAnnotation
-                    key={agent.name}
+                    key={agentId}
                     state={state}
+                    agentId={agentId}
                     agent={agent}
-                    label={state.frames?.[state.activeFrame]?.[agent.name]}
+                    label={state.frames?.[state.activeFrame]?.[agentId]}
                 />
             )}
         </ul>
-        {Object.values(state.agentPresent).every(x => !x) && <p className="text-center mx-2">
+        {state.agents.length === 0 && <p className="text-center mx-2">
             Use the checkboxes below to select the agents that are present in this video
         </p>}
     </div>
