@@ -11,10 +11,10 @@ function updateFrame(state, agent, changes) {
                 ...state.frames[state.activeFrame],
                 [agent]: {
                     ...state.frames[state.activeFrame]?.[agent] ?? {},
-                    ...changes
-                }
-            }
-        }
+                    ...changes,
+                },
+            },
+        },
     }
 }
 
@@ -103,16 +103,16 @@ export default function reducer(state, action) {
         case 'active_agent_toggle_present':
             return {
                 ...state,
-                agentPresent: { ...state.agentPresent, [state.activeAgent]: !state.agentPresent[state.activeAgent] }
+                agentPresent: { ...state.agentPresent, [state.activeAgent]: !state.agentPresent[state.activeAgent] },
             }
         case 'set_agent_position':
             return updateFrame(state, action.agentName, { x: action.x, y: action.y })
         case 'rotate_agent':
             return updateFrame(state, action.agentName, agent => ({
-                angle: normalizeAngle((agent.angle || 0) + action.by)
+                angle: normalizeAngle((agent.angle || 0) + action.by),
             }))
         case 'rotate_active_agent':
-            return reducer(state, { type: 'rotate_agent', agentName: state.activeAgent, by: action.by})
+            return reducer(state, { type: 'rotate_agent', agentName: state.activeAgent, by: action.by })
         case 'move_agent':
             return updateFrame(state, action.agentName, agent => ({
                 x: (agent.x || 0) + (action.x || 0),
@@ -131,19 +131,19 @@ export default function reducer(state, action) {
                 frames: {
                     ...state.frames,
                     [activeFrame]: state.frames[activeFrame] ?? state.frames[prevActiveFrame],
-                }
+                },
             }
         case 'previous_frame':
             return {
                 ...state,
                 loading: true,
-                activeFrame: clampFrame(state.settings, state.activeFrame - state.settings.sampleRate)
+                activeFrame: clampFrame(state.settings, state.activeFrame - state.settings.sampleRate),
             }
         case 'jump_to_frame':
             return {
                 ...state,
                 loading: true,
-                activeFrame: clampFrame(state.settings, action.frame)
+                activeFrame: clampFrame(state.settings, action.frame),
             }
         case 'set_agent_is_blurred':
             return updateFrame(state, action.agentName, { isBlurred: action.isBlurred })
@@ -160,13 +160,13 @@ export default function reducer(state, action) {
         case 'advance_frame_and_set_agent':
             if (state.loading) return state
             return reducer(
-                reducer(state, { type: 'next_frame' }),
-                { type: 'set_active_agent', activeAgent: action.activeAgent })
+                    reducer(state, { type: 'next_frame' }),
+                    { type: 'set_active_agent', activeAgent: action.activeAgent })
         case 'retreat_frame_and_set_agent':
             if (state.loading) return state
             return reducer(
-                reducer(state, { type: 'previous_frame' }),
-                { type: 'set_active_agent', activeAgent: action.activeAgent })
+                    reducer(state, { type: 'previous_frame' }),
+                    { type: 'set_active_agent', activeAgent: action.activeAgent })
         case 'set_dish_mask_position':
             return {
                 ...state,
@@ -174,7 +174,7 @@ export default function reducer(state, action) {
                     ...state.dishMask,
                     x: action.x,
                     y: action.y,
-                }
+                },
             }
         case 'set_dish_mask_radius':
             return {
@@ -182,12 +182,12 @@ export default function reducer(state, action) {
                 dishMask: {
                     ...state.dishMask,
                     radius: action.radius,
-                }
+                },
             }
         case 'reset_dish_mask':
             return {
                 ...state,
-                dishMask: null
+                dishMask: null,
             }
 
         case 'set_dish_mask_locked':
@@ -195,32 +195,40 @@ export default function reducer(state, action) {
                 ...state,
                 dishMask: {
                     ...state.dishMask,
-                    locked: action.value
-                }
+                    locked: action.value,
+                },
             }
 
         case 'add_agent':
             return {
                 ...state,
-                agents: [
-                  ...state.agents,
-                  action.agent,
-                ]
+                agents: {
+                    ...state.agents,
+                    [state.nextAgentId]: action.agent,
+                },
+                nextAgentId: state.nextAgentId + 1,
             }
 
         case 'set_agent_color':
             return {
                 ...state,
-                agents: state.agents.map((agent, i) => i === action.agent ? {
-                    ...agent,
-                    color: action.color,
-                } : agent)
+                agents: Object.fromEntries(
+                        Object.entries(state.agents)
+                                .map(([id, agent]) => [id, id === action.agent ? {
+                                    ...agent,
+                                    color: action.color,
+                                } : agent]),
+                ),
             }
 
         case 'delete_agent':
-            let agents = [...state.agents]
-            agents.splice(action.agent, 1)
-            return { ...state, agents }
+            return {
+                ...state,
+                agents: Object.fromEntries(
+                        Object.entries(state.agents)
+                                .filter(([id, _]) => id !== action.agent),
+                ),
+            }
 
         default:
             throw new Error("Unknown reducer action")

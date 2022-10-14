@@ -13,7 +13,8 @@ const defaultState = {
     activeFrame: 1,
     activeAgent: null,
     agentPresent: {},
-    agents: [],
+    agents: {},
+    nextAgentId: 0,
     frames: {}
 }
 
@@ -119,7 +120,7 @@ export default function Labeler() {
     useEffect(() => {
         if (!hasSample || !state.settings) return
         const save_state = Object.fromEntries(
-          ["activeFrame", "activeAgent", "agentPresent", "agents", "frames"]
+          ["activeFrame", "activeAgent", "agentPresent", "agents", "frames", "nextAgentId"]
             .map(key => [key, state[key]])
         )
         fetch(`${apiBaseUrl}/api/set_label?id=${experimentId}`, {

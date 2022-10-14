@@ -33,13 +33,13 @@ function SidebarAgentsPresent({ state }) {
         <p className="small text-secondary text-center">Applies to the entire video</p>
 
         <ol className="list-unstyled m-3">
-            {state.agents.map((agent, i) => (
+            {Object.entries(state.agents).map(([id, agent]) => (
                 <SidebarAgent
-                    key={i}
+                    key={id}
                     agent={agent}
-                    onColorChange={color => dispatch({ type: 'set_agent_color', agent: i, color })}
+                    onColorChange={color => dispatch({ type: 'set_agent_color', agent: id, color })}
                     onClickEdit={_ => null}
-                    onClickDelete={_ => dispatch({ type: 'delete_agent', agent: i })}
+                    onClickDelete={_ => dispatch({ type: 'delete_agent', agent: id })}
                 />
             ))}
         </ol>
