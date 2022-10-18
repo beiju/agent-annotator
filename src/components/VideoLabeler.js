@@ -2,8 +2,6 @@ import { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { Col } from "react-bootstrap"
 import point_in_polygon from "robust-point-in-polygon"
 
-import agents from "../agents.json"
-
 import './VideoLabeler.css'
 import { LabelsDispatch } from "./labels"
 import { Timeline } from "./Timeline"

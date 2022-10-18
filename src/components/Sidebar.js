@@ -24,6 +24,13 @@ function AgentEditModal({ state, sample, agent: agentId, onClose }) {
     const [hoveredPoint, setHoveredPoint] = useState(null)
     const [draggingPoint, setDraggingPoint] = useState(null)
 
+    useEffect(() => {
+        dispatch({
+            type: 'set_modal',
+            value: agent !== null
+        })
+    }, [agent])
+
     // Much of this is copied almost directly from VideoLabeler
     useEffect(() => {
         const element = document.createElement('img')
@@ -169,14 +176,31 @@ function AgentEditModal({ state, sample, agent: agentId, onClose }) {
         }
     }, [eventToScaledAgentCoordinates, agentId, agent, draggingPoint, dispatch])
 
+    function onChangeDisplayName(event) {
+        dispatch({
+            type: 'set_agent_display_name',
+            agent: agentId,
+            display_name: event.currentTarget.value
+        })
+    }
+
     return (
             <Modal show={agentId !== null} onHide={onClose} size="lg">
                 <Modal.Header closeButton>
                     <Modal.Title>Edit Agent</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-                    Edit agent shape. This affects all frames of this video. If this frame doesn't give a clear view,
-                    you can advance to another frame and Edit again.
+                    <Form>
+                        {agent && <Form.Group className="mb-3" controlId="agentName">
+                            <Form.Label>Agent Name</Form.Label>
+                            <Form.Control type="text" value={agent.display_name} onChange={onChangeDisplayName} />
+                        </Form.Group>}
+
+                        <Form.Group className="mb-3" controlId="agentShape">
+                            <Form.Label>Edit agent shape. This affects all frames of this video. If this frame doesn't give a clear view,
+                                you can advance to another frame and Edit again.</Form.Label>
+                        </Form.Group>
+                    </Form>
 
                     <canvas
                             style={{ cursor: hoveredPoint === null ? "auto" : "grab" }}

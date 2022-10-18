@@ -248,6 +248,24 @@ export default function reducer(state, action) {
                 ),
             }
 
+        case 'set_agent_display_name':
+            return {
+                ...state,
+                agents: Object.fromEntries(
+                        Object.entries(state.agents)
+                                .map(([id, agent]) => [id, id === action.agent ? {
+                                    ...agent,
+                                    display_name: action.display_name,
+                                } : agent]),
+                ),
+            }
+
+        case 'set_modal':
+            return {
+                ...state,
+                modal: action.value
+            }
+
         default:
             throw new Error("Unknown reducer action")
     }

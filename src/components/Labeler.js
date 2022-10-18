@@ -10,6 +10,7 @@ import { apiBaseUrl } from "./util"
 const defaultState = {
     settings: null,
     loading: true,
+    modal: false,
     activeFrame: 1,
     activeAgent: null,
     agentPresent: {},
@@ -111,9 +112,12 @@ export default function Labeler() {
             return ret
         }
 
-        document.addEventListener('keypress', listener)
-        return () => document.removeEventListener('keypress', listener)
-    }, [])
+        // useEffect's clean up makes this pretty easy
+        if (!state.modal) {
+            document.addEventListener('keypress', listener)
+            return () => document.removeEventListener('keypress', listener)
+        }
+    }, [state.modal])
 
     // Save on every frame change
     const hasSample = !!sample
