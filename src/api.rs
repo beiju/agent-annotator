@@ -12,6 +12,7 @@ pub async fn experiment(db: AnnotatorDbConn, id: i32) -> WebResult<serde_json::V
     Ok(json!({
         "id": experiment.id,
         "numFrames": experiment.num_video_frames,
+        "sampleRate": experiment.sample_rate(),
         "label": experiment.label,
     }))
 }

@@ -32,7 +32,7 @@
                     <tr>
                         <td>{{experiment.folder_name}}</td>
                         <td>{{experiment.claimed_by_name}}</td>
-                        <td>{{experiment.num_annotated_frames}}/{{experiment.num_video_frames}} frames</td>
+                        <td>{{experiment.num_annotated_frames}}/{{experiment.num_frames_to_annotate}} annotated ({{experiment.num_video_frames}} total)</td>
                         <td>{{experiment.video_frame_rate}}</td>
                         <td>
                             {% if save_uri %}
@@ -45,18 +45,12 @@
                         </td>
                         <td>
                             {% if experiment.claimed_by == user_id %}
-                                <a href="{{labeler_base_uri}}{{experiment.id}}" class="btn btn-outline-primary">Resume Annotating</a>
-                                <form class="d-inline" action="{{experiment.release_uri}}" method="post">
-                                    <input class="btn btn-outline-danger" type="submit" value="Un-assign Me" />
-                                </form>
+                                <a href="{{experiment.labeler_uri}}" class="btn btn-outline-primary">Resume Annotating</a>
+                                <input formaction="{{ experiment.release_uri }}" class="btn btn-outline-danger" type="submit" value="Un-assign Me" />
                             {% elif experiment.claimed_by %}
-                                <form class="d-inline" action="{{experiment.release_uri}}" method="post">
-                                    <input class="btn btn-outline-danger" type="submit" value="Force Un-assign" />
-                                </form>
+                                <input formaction="{{ experiment.release_uri }}" class="btn btn-outline-danger" type="submit" value="Force Un-assign" />
                             {% else %}
-                                <form class="d-inline" action="{{experiment.claim_uri}}" method="post">
-                                    <input class="btn btn-outline-primary" type="submit" value="Start Annotating" />
-                                </form>
+                                <input formaction="{{experiment.claim_uri}}" class="btn btn-outline-primary" type="submit" value="Start Annotating" />
                             {% endif %}
                             {% if experiment.preview_uri %}
                                 <a href="{{ experiment.preview_uri }}" class="btn btn-outline-primary">

@@ -3,7 +3,7 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 
 use serde::{Deserialize, Serialize};
-use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult, update};
+use diesel::{Queryable, Insertable, AsChangeset, result::QueryResult};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use itertools::Itertools;
@@ -45,6 +45,16 @@ pub struct Experiment {
 
     pub video_frame_rate: Option<f64>,
     pub annotation_frame_rate: Option<f64>,
+}
+
+impl Experiment {
+    pub fn sample_rate(&self) -> usize {
+        if let (Some(video_frame_rate), Some(annotation_frame_rate)) = (self.video_frame_rate, self.annotation_frame_rate) {
+            std::cmp::max(1, (video_frame_rate / annotation_frame_rate) as usize)
+        } else {
+            1
+        }
+    }
 }
 
 #[derive(Insertable, AsChangeset)]

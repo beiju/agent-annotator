@@ -233,6 +233,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
         id: i32,
         folder_name: String,
         num_video_frames: i32,
+        num_frames_to_annotate: i32,
         num_annotated_frames: usize,
         video_frame_rate: Option<String>,
         annotation_frame_rate: Option<f64>,
@@ -241,28 +242,38 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
         claim_uri: rocket::http::uri::Origin<'a>,
         release_uri: rocket::http::uri::Origin<'a>,
         preview_uri: rocket::http::uri::Origin<'a>,
+        labeler_uri: rocket::http::uri::Origin<'a>,
     }
 
     let experiment_context = |(e, u): (experiments::Experiment, Option<experiments::User>)| {
+        let sample_rate = e.sample_rate();
+        // can't flatten this outer and_then because lifetimes
+        let num_annotated_frames = e.label.and_then(|data| {
+            data.as_object()
+                .and_then(|data| data.get("frames"))
+                .and_then(|frames| frames.as_object())
+                .map(|frame_map| {
+                    (0..e.num_video_frames).step_by(sample_rate)
+                        // Frames are 1-indexed
+                        .filter(|i| frame_map.contains_key(&*(i+1).to_string()))
+                        .count()
+                })
+        }).unwrap_or(0);
+
         ExperimentContext {
             id: e.id,
             folder_name: e.folder_name,
             num_video_frames: e.num_video_frames,
+            num_frames_to_annotate: e.num_video_frames / (sample_rate as i32),
             video_frame_rate: e.video_frame_rate.map(|val| format!("{:.2}", val)),
             annotation_frame_rate: e.annotation_frame_rate,
-            num_annotated_frames: e.label
-                .and_then(|data| data.as_object()
-                    .expect("Label was not an object")
-                    .get("frames")
-                    .map(|frames| frames.as_object()
-                        .expect("Label.frames existed but was not an object")
-                        .len()))
-                .unwrap_or(0),
+            num_annotated_frames,
             claimed_by: e.claimed_by,
             claimed_by_name: u.map(|u| u.email),
             claim_uri: uri!(claim(e.id)),
             release_uri: uri!(release(e.id)),
             preview_uri: uri!(experiment_preview(e.id)),
+            labeler_uri: uri!(annotate(e.id)),
         }
     };
 
@@ -287,7 +298,6 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
         user_id: i32,
         project_name: &'a str,
         experiments: Vec<ExperimentContext<'a>>,
-        labeler_base_uri: &'a str,
         refresh_uri: Option<rocket::http::uri::Origin<'a>>,
         members: Vec<UserContext>,
         potential_members: Vec<UserContext>,
@@ -318,7 +328,6 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
             user_id: user.id(),
             project_name: &project.name,
             experiments: experiments.into_iter().map(experiment_context).collect(),
-            labeler_base_uri: "/annotator?experiment_id=",
             refresh_uri: if user.is_admin { Some(uri!(list_refresh(project_id))) } else { None },
             save_uri: if user.is_admin { Some(uri!(list_save(project_id))) } else { None },
             members: members.into_iter().map(|e| e.into()).collect(),
@@ -347,11 +356,13 @@ async fn list_refresh(db: AnnotatorDbConn, project_id: i32, config: &State<Annot
 pub struct ExperimentSettings {
     annotation_frame_rate: Option<f64>,
 }
+
 #[derive(FromForm)]
 pub struct SaveForm {
     settings: HashMap<i32, ExperimentSettings>,
 }
-#[post("/projects/<project_id>/save", data="<form>")]
+
+#[post("/projects/<project_id>/save", data = "<form>")]
 async fn list_save(db: AnnotatorDbConn, project_id: i32, form: Form<SaveForm>, _user: AdminUser) -> WebResult<Redirect> {
     let settings_to_update = form.settings.iter()
         .map(|(&id, settings)| {
@@ -562,7 +573,7 @@ async fn leaderboard(db: AnnotatorDbConn, _user: AdminUser) -> WebResult<Templat
 }
 
 fn labeler_url(experiment_id: i32) -> String {
-    format!("/annotator?experiment_id={}", experiment_id)
+    format!("http://127.0.0.1:3000/annotator?experiment_id={}", experiment_id)
 }
 
 
