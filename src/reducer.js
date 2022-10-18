@@ -230,6 +230,24 @@ export default function reducer(state, action) {
                 ),
             }
 
+        case 'set_agent_shape':
+            return {
+                ...state,
+                agents: Object.fromEntries(
+                        Object.entries(state.agents)
+                                .map(([id, agent]) => [id, id === action.agent ? {
+                                    ...agent,
+                                    shape: agent.shape.map((shape, i) => {
+                                        // Ensure the last and first points are always the same
+                                        const shouldChange = (i === action.i) ||
+                                                (i === 0 && action.i === agent.shape.length - 1) ||
+                                                (i === agent.shape.length - 1 && action.i === 0)
+                                        return shouldChange ? [action.shapeX, action.shapeY] : shape
+                                    }),
+                                } : agent]),
+                ),
+            }
+
         default:
             throw new Error("Unknown reducer action")
     }

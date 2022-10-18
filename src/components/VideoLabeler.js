@@ -11,7 +11,7 @@ import { Toolbar } from "./Toolbar"
 import { getSrcForFrame } from "./util"
 import color_convert from "color-convert"
 
-function transform(x, y, angle, flipped) {
+export function transform(x, y, angle, flipped) {
     const matrix = new DOMMatrix([
         Math.cos(angle), -Math.sin(angle),
         Math.sin(angle), Math.cos(angle),

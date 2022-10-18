@@ -16,7 +16,7 @@ export function Toolbar({ sample, state, returnToIndex }) {
             <Nav>
                 <Navbar.Text>
                     <Spinner animation="border" size="sm" className={`me-2 ${state.loading ? 'visible' : 'invisible'}`} />
-                    Frame {state.activeFrame} of {sample.numFrames}
+                    Frame {state.activeFrame} of {sample.numFrames} (sampling every {sample.sampleRate} frames)
                 </Navbar.Text>
             </Nav>
 

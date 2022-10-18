@@ -147,7 +147,7 @@ export default function Labeler() {
     return (<Container fluid className="h-100">
         <Row className="h-100">
             <LabelsDispatch.Provider value={dispatch}>
-                <Sidebar state={state} />
+                <Sidebar state={state} sample={sample} />
                 <VideoLabeler sample={sample} state={state} returnToIndex={returnToIndex} />
             </LabelsDispatch.Provider>
         </Row>
