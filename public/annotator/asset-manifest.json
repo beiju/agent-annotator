@@ -1,8 +1,8 @@
 {
   "files": {
-    "main.css": "/annotator/static/css/main.bd77ccb9.chunk.css",
-    "main.js": "/annotator/static/js/main.2e3b3c61.chunk.js",
-    "main.js.map": "/annotator/static/js/main.2e3b3c61.chunk.js.map",
+    "main.css": "/annotator/static/css/main.0ab15794.chunk.css",
+    "main.js": "/annotator/static/js/main.2e1c76b5.chunk.js",
+    "main.js.map": "/annotator/static/js/main.2e1c76b5.chunk.js.map",
     "runtime-main.js": "/annotator/static/js/runtime-main.ebb98c94.js",
     "runtime-main.js.map": "/annotator/static/js/runtime-main.ebb98c94.js.map",
     "static/css/2.eca2297d.chunk.css": "/annotator/static/css/2.eca2297d.chunk.css",
@@ -12,14 +12,14 @@
     "static/js/3.b8d425a5.chunk.js.map": "/annotator/static/js/3.b8d425a5.chunk.js.map",
     "index.html": "/annotator/index.html",
     "static/css/2.eca2297d.chunk.css.map": "/annotator/static/css/2.eca2297d.chunk.css.map",
-    "static/css/main.bd77ccb9.chunk.css.map": "/annotator/static/css/main.bd77ccb9.chunk.css.map",
+    "static/css/main.0ab15794.chunk.css.map": "/annotator/static/css/main.0ab15794.chunk.css.map",
     "static/js/2.7606053e.chunk.js.LICENSE.txt": "/annotator/static/js/2.7606053e.chunk.js.LICENSE.txt"
   },
   "entrypoints": [
     "static/js/runtime-main.ebb98c94.js",
     "static/css/2.eca2297d.chunk.css",
     "static/js/2.7606053e.chunk.js",
-    "static/css/main.bd77ccb9.chunk.css",
-    "static/js/main.2e3b3c61.chunk.js"
+    "static/css/main.0ab15794.chunk.css",
+    "static/js/main.2e1c76b5.chunk.js"
   ]
 }
