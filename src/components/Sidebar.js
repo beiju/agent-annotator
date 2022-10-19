@@ -1,7 +1,7 @@
 import { Button, Col, Form, FormCheck, Modal } from "react-bootstrap"
 
 import agents from "../agents.json"
-import { useCallback, useContext, useEffect, useMemo, useState } from "react"
+import { useCallback, useContext, useEffect, useState } from "react"
 import { LabelsDispatch } from "./labels"
 import color_convert from "color-convert"
 import { BsPencilSquare } from "react-icons/bs"
@@ -12,7 +12,7 @@ import { getSrcForFrame } from "./util"
 import { transform } from "./VideoLabeler"
 
 const SCALE_FACTOR = 5
-const PADDING = 100
+const PADDING = 500
 
 function AgentEditModal({ state, sample, agent: agentId, onClose }) {
     const dispatch = useContext(LabelsDispatch)
@@ -29,7 +29,7 @@ function AgentEditModal({ state, sample, agent: agentId, onClose }) {
             type: 'set_modal',
             value: agent !== null
         })
-    }, [agent])
+    }, [agent, dispatch])
 
     // Much of this is copied almost directly from VideoLabeler
     useEffect(() => {
@@ -49,9 +49,12 @@ function AgentEditModal({ state, sample, agent: agentId, onClose }) {
     // Remember bounds while dragging
     const [[top, bottom, left, right], setDimensions] = useState([NaN, NaN, NaN, NaN])
     useEffect(() => {
+        console.log("effect")
         if (!agent) {
+            console.log("clearing dimensions")
             setDimensions([NaN, NaN, NaN, NaN])
         } else if (draggingPoint === null) {
+            console.log("updating dimensions")
             const top = Math.min(...agent.shape.map(([_, y]) => y))
             const bottom = Math.max(...agent.shape.map(([_, y]) => y))
             const left = Math.min(...agent.shape.map(([x, _]) => x))
@@ -73,6 +76,7 @@ function AgentEditModal({ state, sample, agent: agentId, onClose }) {
 
     useEffect(() => {
         if (!canvas) return
+        console.log("updating canvas size")
         canvas.width = (right - left) * SCALE_FACTOR + PADDING
         canvas.height = (bottom - top) * SCALE_FACTOR + PADDING
     }, [canvas, top, bottom, left, right, draggingPoint])
@@ -87,6 +91,8 @@ function AgentEditModal({ state, sample, agent: agentId, onClose }) {
 
         return { x, y, angle }
     }, [canvas])
+
+    const [mouseLocation, setMouseLocation] = useState(null)
     useEffect(() => {
         if (!agent) return
         if (!canvas) return
@@ -135,19 +141,30 @@ function AgentEditModal({ state, sample, agent: agentId, onClose }) {
             ctx.fill()
         }
 
-    }, [canvas, image, agentId, agent, getAgentLocation, state, hoveredPoint])
+        // Draw mouse location
+        if (mouseLocation) {
+            ctx.strokeStyle = `#000`
+            ctx.fillStyle = `#000`
+            ctx.beginPath()
+            ctx.arc(mouseLocation.x, mouseLocation.y, 5, 0, 2 * Math.PI)
+            ctx.stroke()
+            ctx.fill()
+        }
+
+    }, [canvas, image, agentId, agent, getAgentLocation, state, hoveredPoint, mouseLocation])
 
     const eventToScaledAgentCoordinates = useCallback(function eventToScaledAgentCoordinates(event) {
         if (!canvas) throw new Error("Canvas ref was cleared")
 
-        const x = event.nativeEvent.offsetX * (canvas.width / canvas.clientWidth) - PADDING / 2 + left * SCALE_FACTOR
-        const y = event.nativeEvent.offsetY * (canvas.height / canvas.clientHeight) - PADDING / 2 + top * SCALE_FACTOR
+        const x = event.nativeEvent.offsetX * (canvas.width / canvas.clientWidth) - canvas.width / 2
+        const y = event.nativeEvent.offsetY * (canvas.height / canvas.clientHeight) - canvas.height / 2
 
         return { x, y }
-    }, [canvas, left, top])
+    }, [canvas, left, top, bottom, right])
 
     const onMouseMove = useCallback(function onMouseMove(event) {
         const { x, y }  = eventToScaledAgentCoordinates(event)
+        setMouseLocation({ x, y })
 
         if (draggingPoint !== null) {
             dispatch({
@@ -167,7 +184,7 @@ function AgentEditModal({ state, sample, agent: agentId, onClose }) {
                     closest = { dist, i }
                 }
             }
-            if (closest === null || closest.dist > 8) {
+            if (closest === null || closest.dist > 15) {
                 setHoveredPoint(null)
             } else {
                 setHoveredPoint(closest.i)
@@ -296,7 +313,7 @@ function SidebarAgent({ agent, onClickEdit, onClickDelete, onColorChange }) {
         onChange={e => onColorChange(e.currentTarget.value)}
         title="Agent color"
       />
-      <span className="flex-grow-1">{agent.display_name}</span>
+      <span className="flex-grow-1 flex-truncate-text">{agent.display_name}</span>
       <Button className="icon-button" size="sm" variant="light" onClick={_ => onClickDelete()}><RiDeleteBack2Fill /></Button>
       <Button className="icon-button" size="sm" variant="light" onClick={_ => onClickEdit()}><BsPencilSquare /></Button>
     </li>)
