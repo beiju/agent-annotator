@@ -4,6 +4,7 @@ use rocket::serde::json::{json, Json};
 use rocket::State;
 use rocket_auth::User;
 use crate::{AnnotatorConfig, AnnotatorDbConn, experiments, WebError, WebResult};
+use crate::schema_enums::ExperimentStatus;
 
 #[get("/experiment?<id>")]
 pub async fn experiment(db: AnnotatorDbConn, id: i32) -> WebResult<serde_json::Value> {
@@ -52,15 +53,16 @@ pub async fn get_project(db: AnnotatorDbConn, id: i32) -> WebResult<serde_json::
 
         experiments_dsl::experiments
             .filter(experiments_dsl::project_id.eq(id))
-            .select((experiments_dsl::id, experiments_dsl::folder_name))
-            .get_results::<(i32, String)>(c)
+            .select((experiments_dsl::id, experiments_dsl::folder_name, experiments_dsl::status))
+            .get_results::<(i32, String, ExperimentStatus)>(c)
     }).await?;
 
     let results = output.iter()
-        .map(|(id, name)| {
+        .map(|(id, name, status)| {
             json!({
                 "id": id,
                 "name": name,
+                "status": status,
             })
         })
         .collect();
