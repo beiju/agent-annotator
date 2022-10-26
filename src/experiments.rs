@@ -13,6 +13,7 @@ use rocket::futures::StreamExt;
 
 use crate::schema::*;
 use crate::{AnnotatorDbConn, WebError, WebResult};
+use crate::schema_enums::ExperimentStatus;
 
 #[derive(Serialize, Queryable)]
 pub struct Project {
@@ -45,6 +46,8 @@ pub struct Experiment {
 
     pub video_frame_rate: Option<f64>,
     pub annotation_frame_rate: Option<f64>,
+
+    pub status: ExperimentStatus,
 }
 
 impl Experiment {

@@ -1,4 +1,6 @@
 mod experiments;
+mod schema_enums;
+#[allow(unused_imports)]
 mod schema;
 mod api;
 mod projects;
