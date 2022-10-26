@@ -383,6 +383,7 @@ pub fn claim(conn: &PgConnection, user_id: i32, experiment_id: i32) -> QueryResu
         .set((
             claimed_by.eq(user_id),
             claimed_at.eq(diesel::dsl::now),
+            status.eq(ExperimentStatus::InProgress)
         ))
         .execute(conn)
         .map(|_| ())
