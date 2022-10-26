@@ -45,6 +45,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
 use crate::experiments::UpdateExperimentSettings;
+use crate::schema_enums::ExperimentStatus;
 
 #[rocket_sync_db_pools::database("annotator")]
 pub struct AnnotatorDbConn(diesel::PgConnection);
@@ -236,6 +237,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
     #[derive(Serialize)]
     struct ExperimentContext<'a> {
         id: i32,
+        status: ExperimentStatus,
         folder_name: String,
         num_video_frames: i32,
         num_frames_to_annotate: i32,
@@ -267,6 +269,7 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
 
         ExperimentContext {
             id: e.id,
+            status: e.status,
             folder_name: e.folder_name,
             num_video_frames: e.num_video_frames,
             num_frames_to_annotate: e.num_video_frames / (sample_rate as i32),
@@ -302,12 +305,13 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
     struct ExperimentListContext<'a> {
         user_id: i32,
         project_name: &'a str,
-        experiments: Vec<ExperimentContext<'a>>,
+        experiments: HashMap<ExperimentStatus, Vec<ExperimentContext<'a>>>,
         refresh_uri: Option<rocket::http::uri::Origin<'a>>,
         members: Vec<UserContext>,
         potential_members: Vec<UserContext>,
         add_member_uri: Option<rocket::http::uri::Origin<'a>>,
         save_uri: Option<rocket::http::uri::Origin<'a>>,
+        set_status_uri: Option<rocket::http::uri::Origin<'a>>,
     }
 
     if let Some((project, experiments)) = db.run(move |c| {
@@ -332,12 +336,15 @@ async fn project_detail(db: AnnotatorDbConn, project_id: i32, user: User) -> Web
         Ok(Template::render("project-detail", ExperimentListContext {
             user_id: user.id(),
             project_name: &project.name,
-            experiments: experiments.into_iter().map(experiment_context).collect(),
+            experiments: experiments.into_iter()
+                .map(experiment_context)
+                .into_group_map_by(|e| e.status),
             refresh_uri: if user.is_admin { Some(uri!(list_refresh(project_id))) } else { None },
             save_uri: if user.is_admin { Some(uri!(list_save(project_id))) } else { None },
             members: members.into_iter().map(|e| e.into()).collect(),
             potential_members: potential_members.into_iter().map(|e| e.into()).collect(),
             add_member_uri: if user.is_admin { Some(uri!(add_member(project_id))) } else { None },
+            set_status_uri: if user.is_admin { Some(uri!(list_set_status(project_id))) } else { None },
         }))
     } else {
         Err(WebError::ProjectNotFound(project_id))
@@ -376,6 +383,21 @@ async fn list_save(db: AnnotatorDbConn, project_id: i32, form: Form<SaveForm>, _
         .collect();
     db.run(move |c| {
         experiments::update_project(c, project_id, settings_to_update)
+    }).await?;
+
+    Ok(Redirect::to(uri!(project_detail(project_id))))
+}
+
+#[derive(FromForm)]
+pub struct SetStatusForm {
+    status: ExperimentStatus,
+    experiment: Vec<i32>,
+}
+
+#[post("/projects/<project_id>/set_status", data = "<form>")]
+async fn list_set_status(db: AnnotatorDbConn, project_id: i32, form: Form<SetStatusForm>, _user: AdminUser) -> WebResult<Redirect> {
+    db.run(move |c| {
+        experiments::set_status(c, project_id, &form.experiment, form.status)
     }).await?;
 
     Ok(Redirect::to(uri!(project_detail(project_id))))
@@ -591,7 +613,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .mount("/", routes![
             index, post_login, signup, post_signup, logout, list_refresh, claim, release, annotate,
             new_project, new_project_post, project_detail, add_member, leaderboard,
-            experiment_preview, experiment_preview_video, list_save
+            experiment_preview, experiment_preview_video, list_save, list_set_status
         ])
         .mount("/public", FileServer::from("public"))
         .mount("/annotator", FileServer::from("public/annotator"))

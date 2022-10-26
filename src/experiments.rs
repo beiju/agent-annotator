@@ -113,14 +113,15 @@ pub fn experiments_for_project(conn: &PgConnection, project_id: i32) -> QueryRes
         .get_results(conn)?
         .into_iter()
         .map(|experiment| experiment_fix_frame_count(conn, experiment))
-        .map_ok(|experiment| match users_dsl::users
-            .filter(users_dsl::id.eq(experiment.id))
+        .map_ok(|experiment| experiment.claimed_by.map(move |user_id| match users_dsl::users
+            .filter(users_dsl::id.eq(user_id))
             .get_result(conn)
             .optional() {
             Ok(user) => Ok((experiment, user)),
             Err(e) => Err(e)
-        })
+        }))
         .flatten()
+        .flatten() // so flat
         .collect()
 }
 
@@ -400,6 +401,19 @@ pub fn set_label(conn: &PgConnection, user_id: i32, experiment_id: i32, label: s
     diesel::update(dsl::experiments.find(experiment_id))
         .filter(dsl::claimed_by.eq(user_id))
         .set(dsl::label.eq(label))
+        .execute(conn)
+        .map(|_| ())
+}
+
+pub fn set_status(conn: &PgConnection, project_id: i32, experiment_ids: &[i32], status: ExperimentStatus) -> QueryResult<()> {
+    use diesel::dsl::*;
+    use crate::schema::experiments::dsl;
+
+    // TODO Verify the user has access to this experiment
+    diesel::update(dsl::experiments)
+        // Filtering by project ID to defend against entering random IDs
+        .filter(dsl::project_id.eq(project_id).and(dsl::id.eq(any(experiment_ids))))
+        .set(dsl::status.eq(status))
         .execute(conn)
         .map(|_| ())
 }

@@ -1,9 +1,11 @@
+{% import "project-detail-row" as rowtypes %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     {% block head %}
-    <link rel="stylesheet" href="/public/bootstrap-5.0.2-dist/css/bootstrap.css" />
-    <title>{% block title %}{% endblock title %} - Annotator</title>
+        <link rel="stylesheet" href="/public/bootstrap-5.0.2-dist/css/bootstrap.css" />
+        <script src="/public/bootstrap-5.0.2-dist/js/bootstrap.bundle.js"></script>
+        <title>{% block title %}{% endblock title %} - Annotator</title>
     {% endblock head %}
 </head>
 <body class="bg-light">
