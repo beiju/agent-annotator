@@ -75,6 +75,9 @@ pub enum WebError {
 
     #[error("Couldn't find project {0}")]
     ProjectNotFound(i32),
+
+    #[error("Cannot access path {0}")]
+    DisallowedPath(String),
 }
 
 trait UserFacingError {
