@@ -267,12 +267,6 @@ async fn insert_experiment(db: &AnnotatorDbConn, new_experiment: NewExperiment, 
         Ok::<_, diesel::result::Error>(experiment_id)
     }).await?;
 
-    #[derive(Debug, Deserialize)]
-    struct DataRecord {
-        video_frame_number: i64,
-        video_camera_timestamp: f64,
-    }
-
     let frame_rate = read_frame_rate(&file).ok();
     // println!("{} frames", frame_timings.len());
     // let mut histogram = multimap::MultiMap::new();
@@ -332,6 +326,13 @@ async fn insert_experiment(db: &AnnotatorDbConn, new_experiment: NewExperiment, 
 }
 
 fn read_frame_rate(file: &DirEntry) -> csv::Result<f64> {
+    #[derive(Debug, Deserialize)]
+    struct DataRecord {
+        video_frame_number: i64,
+        video_camera_timestamp: f64,
+    }
+
+
     println!("Trying to read frame rate");
     let mut data = csv::Reader::from_path(file.path().join("data.csv"))?;
     let durations = data.deserialize()
