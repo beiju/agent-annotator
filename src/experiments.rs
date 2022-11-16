@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::fs::DirEntry;
 use std::path::Path;
 use chrono::{DateTime, Utc};
 
@@ -272,26 +273,7 @@ async fn insert_experiment(db: &AnnotatorDbConn, new_experiment: NewExperiment, 
         video_camera_timestamp: f64,
     }
 
-    println!("Reading frame rate");
-    let mut data = csv::Reader::from_path(file.path().join("data.csv"))?;
-    let durations = data.deserialize()
-        .map(|row_raw| {
-            let row: DataRecord = row_raw?;
-            Ok((row.video_frame_number, row.video_camera_timestamp))
-        })
-        .collect::<Result<BTreeMap<_, _>, csv::Error>>()? // btreemap has ordered iteration
-        .into_iter()
-        .tuple_windows()
-        .map(|((prev_frame, prev_time), (frame, time))| {
-            (time - prev_time) / (frame - prev_frame) as f64
-        });
-    let mut total_duration = 0.0;
-    let mut n = 0;
-    for duration in durations {
-        total_duration += duration;
-        n += 1;
-    }
-    let frame_rate = (n as f64) / total_duration;
+    let frame_rate = read_frame_rate(&file).ok();
     // println!("{} frames", frame_timings.len());
     // let mut histogram = multimap::MultiMap::new();
     // for  in frame_timings.iter().tuple_windows() {
@@ -347,6 +329,30 @@ async fn insert_experiment(db: &AnnotatorDbConn, new_experiment: NewExperiment, 
     }).await?;
 
     Ok(())
+}
+
+fn read_frame_rate(file: &DirEntry) -> csv::Result<f64> {
+    println!("Trying to read frame rate");
+    let mut data = csv::Reader::from_path(file.path().join("data.csv"))?;
+    let durations = data.deserialize()
+        .map(|row_raw| {
+            let row: DataRecord = row_raw?;
+            Ok((row.video_frame_number, row.video_camera_timestamp))
+        })
+        .collect::<Result<BTreeMap<_, _>, csv::Error>>()? // btreemap has ordered iteration
+        .into_iter()
+        .tuple_windows()
+        .map(|((prev_frame, prev_time), (frame, time))| {
+            (time - prev_time) / (frame - prev_frame) as f64
+        });
+    let mut total_duration = 0.0;
+    let mut n = 0;
+    for duration in durations {
+        total_duration += duration;
+        n += 1;
+    }
+    let frame_rate = (n as f64) / total_duration;
+    Ok(frame_rate)
 }
 
 pub fn update_project(conn: &PgConnection, project_id: i32, updates: HashMap<i32, UpdateExperimentSettings>) -> QueryResult<()> {
