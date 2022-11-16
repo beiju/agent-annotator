@@ -8,6 +8,7 @@
             <th>Progress</th>
             <th>Video FPS</th>
             <th>Annotation FPS</th>
+            <th>ID</th>
             <th></th> {# buttons #}
         </tr>
         {% for experiment in these_experiments %}
@@ -26,6 +27,7 @@
                         {{ experiment.annotation_frame_rate }}
                     {% endif %}
                 </td>
+                <td>{{experiment.id}}</td>
                 <td>
                     {% if experiment.claimed_by == user_id %}
                         <a href="{{experiment.labeler_uri}}" class="btn btn-outline-primary">Resume Annotating</a>
