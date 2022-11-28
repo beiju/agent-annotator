@@ -6,9 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rocket = { version = "0.5.0-rc.1", features=["json"] }
-rocket_dyn_templates = { version = "0.1.0-rc.1", features=["tera"] }
-rocket_sync_db_pools = { version = "0.1.0-rc.1", default-features=false, features= ["diesel_postgres_pool"] }
+rocket = { version = "0.5.0-rc.2", features=["json"] }
+rocket_dyn_templates = { version = "0.1.0-rc.2", features=["tera"] }
+rocket_sync_db_pools = { version = "0.1.0-rc.2", default-features=false, features= ["diesel_postgres_pool"] }
 rocket_auth = { version = "0.4.0", features = ["sqlx-postgres", "redis"] }
 rocket_cors = "0.6.0-alpha1"
 sqlx = { version = "0.5.13", features = ["runtime-tokio-rustls"] }
@@ -18,11 +18,11 @@ thiserror = "1.0.31"
 diesel = { version = "1.4.4", features = ["postgres", "chrono", "serde_json"] }
 diesel_migrations = "1.4.0"
 diesel-derive-enum = { version = "1.1.2", features = ["postgres"] }
-opencv = { version = "0.63.1", features = ["clang-runtime"] }
+opencv = { version = "0.74.0" }
 chrono = { version = "0.4.19", features = ["serde"] }
 itertools = "0.10.3"
-openh264 = "0.2.13"
+#openh264 = "0.2.13"
 tokio-util = { version = "0.7.3", features = ["rt"] }
-ac-ffmpeg = "0.17.4"
+#ac-ffmpeg = "0.17.4"
 csv = "1.1.6"
 multimap = "0.8.3"
