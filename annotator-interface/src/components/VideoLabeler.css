@@ -1,0 +1,16 @@
+.labeler-canvas-container {
+    overflow: hidden;
+    max-height: calc(100vh - 56px);
+    display: inline-block;
+    align-self: center;
+}
+
+.labeler-canvas {
+    object-fit: contain;
+    width: 100%;
+    max-height: calc(100vh - 56px - 32px);
+}
+
+.flex-basis-0 {
+    flex-basis: 0;
+}
