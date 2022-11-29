@@ -1,4 +1,4 @@
 .env
-/target
-/data
-/Rocket.toml
+/annotator-backend/target
+/annotator-backend/data
+/annotator-backend/Rocket.toml
