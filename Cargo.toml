@@ -10,8 +10,9 @@ rocket = { version = "0.5.0-rc.2", features=["json"] }
 rocket_dyn_templates = { version = "0.1.0-rc.2", features=["tera"] }
 rocket_sync_db_pools = { version = "0.1.0-rc.2", default-features=false, features= ["diesel_postgres_pool"] }
 rocket_auth = { version = "0.4.0", features = ["sqlx-postgres", "redis"] }
-rocket_cors = "0.6.0-alpha1"
-sqlx = { version = "0.5.13", features = ["runtime-tokio-rustls"] }
+# Change back to crates.io version when https://github.com/lawliet89/rocket_cors/pull/108 is published
+rocket_cors = { git = "https://github.com/lawliet89/rocket_cors.git", rev = "54fae070"  }
+sqlx = { version="0.5.5", features = ["runtime-tokio-rustls"] }
 serde = "1.0.137"
 serde_json = "1.0.81"
 thiserror = "1.0.31"
